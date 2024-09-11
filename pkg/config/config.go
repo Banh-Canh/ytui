@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
+
+	"github.com/Banh-Canh/ytui/pkg/utils"
 )
 
 type Config struct {
@@ -15,7 +18,8 @@ type Config struct {
 // Creates the YAML config file
 func CreateDefaultConfigFile(filePath string) {
 	// Struct with empty channels list
-
+	utils.Logger.Info("Config file set.", zap.String("filePath", filePath))
+	viper.SetDefault("logLevel", "info")
 	viper.SetDefault("invidious", map[string]interface{}{
 		"instance": "invidious.jing.rocks",
 	})
@@ -31,23 +35,25 @@ func CreateDefaultConfigFile(filePath string) {
 	viper.SafeWriteConfigAs(filePath) // nolint:all
 }
 
-func GetConfigPath() (string, error) {
+func GetConfigDirPath() (string, error) {
 	// Get user's home directory
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("could not get home directory: %v", err)
+		utils.Logger.Error("Failed to get user home directory.", zap.Error(err))
+		return "", fmt.Errorf("failed get home directory: %v", err)
 	}
-	// Construct the file path to the YAML file
-	filePath := filepath.Join(homeDir, ".config", "ytui", "config.yaml")
-	return filePath, nil
+	// Construct the directory path to the config directory
+	configDirPath := filepath.Join(homeDir, ".config", "ytui")
+	return configDirPath, nil
 }
 
 func ReadConfig(filePath string) error {
 	// Set up Viper to read from the config file
 	viper.SetConfigFile(filePath)
-
+	utils.Logger.Debug("Reading config file...", zap.String("filePath", filePath))
 	// Read the config file
 	if err := viper.ReadInConfig(); err != nil {
+		utils.Logger.Error("Failed to read config file.", zap.Error(err))
 		return fmt.Errorf("failed to read config file: %v", err)
 	}
 	return nil

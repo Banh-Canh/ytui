@@ -2,11 +2,13 @@ package youtube
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 
 	"github.com/ktr0731/go-fuzzyfinder"
+	"go.uber.org/zap"
+
+	"github.com/Banh-Canh/ytui/pkg/utils"
 )
 
 // Fetches video descriptions in the background and caches them.
@@ -18,20 +20,18 @@ func fetchDescriptionsInBackground(
 	go func() {
 		for {
 			for _, video := range videoData {
+				utils.Logger.Debug("Fetching video description...", zap.String("videoTitle", video.Title))
 				videoID := video.VideoID
-
-				// Check if the description is already in the SearchResultItem
 				cacheLock.RLock()
 				_, found := descriptionCache[videoID]
 				cacheLock.RUnlock()
-
 				if found {
-					// Skip fetching if the description is already in the cache
+					utils.Logger.Debug("Video description found in cache, skipping...", zap.String("videoTitle", video.Title))
 					continue
 				}
 
 				if video.Description != "" {
-					// If the description is already filled in the SearchResultItem, use it
+					utils.Logger.Debug("Video description already exists in query, using it...", zap.String("videoTitle", video.Title))
 					cacheLock.Lock()
 					descriptionCache[videoID] = cleanDescription(video.Description)
 					cacheLock.Unlock()
@@ -39,12 +39,11 @@ func fetchDescriptionsInBackground(
 				}
 
 				// Fetch the video description with retries
-				if err := fetchAndCacheDescription(videoID, descriptionCache, cacheLock); err != nil {
-					log.Printf("Failed to fetch video %s description, retrying...", videoID)
+				if err := fetchAndCacheDescription(video, descriptionCache, cacheLock); err != nil {
+					utils.Logger.Error("Failed to fetch description.", zap.Error(err))
 					continue
 				}
 			}
-
 			// Check if all descriptions are fetched
 			if allDescriptionsFetched(videoData, descriptionCache) {
 				break
@@ -73,23 +72,23 @@ func cleanDescription(description string) string {
 }
 
 // Fetches a single video description and stores it in cache.
-func fetchAndCacheDescription(videoID string, descriptionCache map[string]string, cacheLock *sync.RWMutex) error {
+func fetchAndCacheDescription(video SearchResultItem, descriptionCache map[string]string, cacheLock *sync.RWMutex) error {
 	for {
-		videoInfo, err := SearchVideoInfo(videoID)
+		videoInfo, err := SearchVideoInfo(video.VideoID)
 		if err != nil {
-			return err
+			utils.Logger.Info("Fetching description failed. Retrying...", zap.String("videoTitle", video.Title), zap.Error(err))
 		}
 		description := cleanDescription(videoInfo.Description)
-
 		// Store the cleaned description in the cache
 		cacheLock.Lock()
-		descriptionCache[videoID] = description
+		descriptionCache[video.VideoID] = description
 		cacheLock.Unlock()
-
-		if descriptionCache[videoID] != "" {
-			return nil
+		if descriptionCache[video.VideoID] != "" || description == "" {
+			break
 		}
 	}
+	utils.Logger.Debug("Fetched description successfully.", zap.String("videoTitle", video.Title))
+	return nil
 }
 
 func allDescriptionsFetched(videoData []SearchResultItem, descriptionCache map[string]string) bool {
@@ -98,6 +97,7 @@ func allDescriptionsFetched(videoData []SearchResultItem, descriptionCache map[s
 			return false
 		}
 	}
+	utils.Logger.Info("Finished fetching all query's video descriptions.")
 	return true
 }
 
@@ -135,7 +135,7 @@ func getVideoPreview(video SearchResultItem, descriptionCache map[string]string,
 }
 
 // Handles the interactive menu for video selection. Powered by fzf-like
-func YoutubeResultMenu(videoData []SearchResultItem) SearchResultItem {
+func YoutubeResultMenu(videoData []SearchResultItem) (SearchResultItem, error) {
 	// Cache to store video descriptions
 	descriptionCache := make(map[string]string)
 	cacheLock := sync.RWMutex{} // For thread-safe cache access
@@ -143,7 +143,7 @@ func YoutubeResultMenu(videoData []SearchResultItem) SearchResultItem {
 	// Start background fetching of descriptions
 	fetchDescriptionsInBackground(videoData, descriptionCache, &cacheLock)
 
-	// Invert the indexing order of videoData by adjusting the index in the callback
+	utils.Logger.Info("Opening search menu.")
 	idx, err := fuzzyfinder.Find(
 		videoData,
 		func(i int) string {
@@ -165,9 +165,9 @@ func YoutubeResultMenu(videoData []SearchResultItem) SearchResultItem {
 		}),
 		fuzzyfinder.WithCursorPosition(fuzzyfinder.CursorPositionTop))
 	if err != nil {
-		log.Fatal(err)
+		utils.Logger.Info("Closing search menu.")
+		return SearchResultItem{}, err
 	}
-
 	invertedIdx := len(videoData) - 1 - idx
-	return videoData[invertedIdx]
+	return videoData[invertedIdx], nil
 }

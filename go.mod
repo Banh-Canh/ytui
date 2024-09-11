@@ -6,6 +6,7 @@ require (
 	github.com/ktr0731/go-fuzzyfinder v0.8.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
+	go.uber.org/zap v1.21.0
 	golang.org/x/oauth2 v0.23.0
 )
 

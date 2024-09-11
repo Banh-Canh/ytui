@@ -5,14 +5,16 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 
 	"github.com/Banh-Canh/ytui/pkg/config"
+	"github.com/Banh-Canh/ytui/pkg/utils"
 	"github.com/Banh-Canh/ytui/pkg/youtube"
 )
 
@@ -27,39 +29,49 @@ to retrieve your user informations. You must also configure your OAuth2 client i
 
 It will also only pick from the 50 most relevants subscribed channels in your Youtube account.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		utils.Logger.Info("Command 'subscribed' executed.")
 		var channelList []string
 		var err error
 		// Read the config file
-		configPath, err := config.GetConfigPath()
+		configDir, err := config.GetConfigDirPath()
 		if err != nil {
-			log.Fatalf("Failed to get config path: %v", err)
+			utils.Logger.Fatal("Failed to get config path.", zap.Error(err))
 			os.Exit(1)
 		}
+		utils.Logger.Debug("Config directory retrieved.", zap.String("config_dir", configDir))
+		configPath := filepath.Join(configDir, "config.yaml")
 		if err := config.ReadConfig(configPath); err != nil {
-			log.Fatalf("Failed to read config: %v", err)
+			utils.Logger.Fatal("Failed to read config.", zap.Error(err))
 		}
+		utils.Logger.Debug("Config file read successfully.", zap.String("config_file", configPath))
 		clientID := viper.GetString("youtube.clientid")
 		secretID := viper.GetString("youtube.secretid")
-
+		utils.Logger.Debug("Retrieved YouTube API credentials.", zap.String("client_id", clientID))
 		if !viper.GetBool("channels.local") {
 			apiChan, err := youtube.NewYouTubeAPI(clientID, secretID)
 			if err != nil {
-				log.Fatalf("Failed to authenticate to Youtube API: %v", err)
+				utils.Logger.Fatal("Failed to authenticate to YouTube API.", zap.Error(err))
 				os.Exit(1)
 			}
 			yt := <-apiChan
+			utils.Logger.Info("YouTube API authenticated successfully.")
+
 			channelList, err = yt.GetSubscribedChannels()
 			if err != nil {
-				log.Fatalf("Failed to retrieve channels list: %v", err)
+				utils.Logger.Fatal("Failed to retrieve channels list.", zap.Error(err))
+				os.Exit(1)
 			}
-
+			utils.Logger.Info("Retrieved subscribed channels list.", zap.Int("channel_count", len(channelList)))
 		} else {
 			channelList = viper.GetStringSlice("channels.subscribed")
+			utils.Logger.Info("Retrieved local subscribed channels.", zap.Int("channel_count", len(channelList)))
 		}
 		channels, err := youtube.GetAllChannelsInfo(channelList)
 		if err != nil {
-			log.Fatalf("Failed to get all channels data: %v", err)
+			utils.Logger.Fatal("Failed to get all channels data.", zap.Error(err))
+			os.Exit(1)
 		}
+		utils.Logger.Info("Retrieved all channels information.", zap.Int("channel_count", len(channels)))
 		for _, channel := range channels {
 			fmt.Printf("\n")
 			fmt.Printf("Author: %s\n", channel.Author)
