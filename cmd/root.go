@@ -47,6 +47,12 @@ func initConfig() {
 	if err != nil {
 		os.Exit(1)
 	}
+	configPath := filepath.Join(configDir, "config.yaml")
+	viper.SetConfigFile(configPath)
+	if err := viper.ReadInConfig(); err != nil {
+		fmt.Printf("failed to read config file: %v", err)
+		os.Exit(1)
+	}
 	logLevelStr := viper.GetString("logLevel")
 	logLevel := zapcore.InfoLevel //nolint:all
 	switch logLevelStr {
@@ -62,7 +68,7 @@ func initConfig() {
 	}
 	utils.InitializeLogger(logLevel, filepath.Join(configDir, "ytui.log"))
 	utils.Logger.Info("Initializing configuration...")
-	config.CreateDefaultConfigFile(filepath.Join(configDir, "config.yaml"))
+	config.CreateDefaultConfigFile(configPath)
 	utils.Logger.Info("Initialized configuration.")
 }
 
