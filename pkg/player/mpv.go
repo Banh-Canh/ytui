@@ -1,11 +1,15 @@
 package player
 
 import (
-	"fmt"
 	"os/exec"
+
+	"go.uber.org/zap"
+
+	"github.com/Banh-Canh/ytui/pkg/utils"
 )
 
 func RunMPV(videoPath string) {
+	utils.Logger.Debug("Starting the video with mpv...")
 	args := []string{
 		"--ytdl-format=bestvideo[ext=mp4][height<=?2160]+bestaudio[ext=m4a]",
 		"--ytdl-raw-options=mark-watched=,cookies-from-browser=firefox",
@@ -14,6 +18,8 @@ func RunMPV(videoPath string) {
 	cmd := exec.Command("mpv", args...)
 	err := cmd.Start()
 	if err != nil {
-		fmt.Printf("Error running MPV: %v\n", err)
+		utils.Logger.Error("Failed to start mpv.", zap.Error(err))
+	} else {
+		utils.Logger.Info("Mpv started.")
 	}
 }

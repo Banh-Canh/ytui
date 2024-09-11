@@ -21,7 +21,11 @@ func TestCreateDefaultConfigFile(t *testing.T) {
 
 func TestGetConfigPath(t *testing.T) {
 	// Act
-	path, err := GetConfigPath()
+	configDir, err := GetConfigDirPath()
+	if err != nil {
+		os.Exit(1)
+	}
+	path := filepath.Join(configDir, "config.yaml")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

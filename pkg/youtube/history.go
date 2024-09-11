@@ -2,43 +2,44 @@ package youtube
 
 import (
 	"encoding/json"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
-)
 
-func GetHistoryFilePath() string {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("Error getting user home directory: %v", err)
-	}
-	watched_history := filepath.Join(homeDir, ".config", "ytui", "watched_history.json")
-	return watched_history
-}
+	"go.uber.org/zap"
+
+	"github.com/Banh-Canh/ytui/pkg/config"
+	"github.com/Banh-Canh/ytui/pkg/utils"
+)
 
 func SaveHistory(history *[]SearchResultItem, filename string) error {
 	dir := filepath.Dir(filename)
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		utils.Logger.Error("Failed to create directory for history file.", zap.String("directory", dir), zap.Error(err))
 		return err
 	}
-
 	file, err := os.Create(filename)
 	if err != nil {
+		utils.Logger.Error("Failed to create history file.", zap.String("filename", filename), zap.Error(err))
 		return err
 	}
 	defer file.Close()
-
 	data, err := json.MarshalIndent(history, "", "  ")
 	if err != nil {
+		utils.Logger.Error("Failed to marshal history data.", zap.String("filename", filename), zap.Error(err))
 		return err
 	}
-	return os.WriteFile(filename, data, 0644)
+	err = os.WriteFile(filename, data, 0644)
+	if err != nil {
+		utils.Logger.Error("Failed to write history data to file.", zap.String("filename", filename), zap.Error(err))
+		return err
+	}
+	utils.Logger.Info("Successfully saved history data.", zap.String("filename", filename), zap.Int("item_count", len(*history)))
+	return nil
 }
 
 func GetWatchedVideos(filename string) ([]SearchResultItem, error) {
 	var history []SearchResultItem // history should not be a pointer
-
 	// Check if the file exists
 	data, err := os.ReadFile(filename)
 	if os.IsNotExist(err) {
@@ -46,20 +47,25 @@ func GetWatchedVideos(filename string) ([]SearchResultItem, error) {
 		emptyHistory := []SearchResultItem{}
 		emptyHistoryData, err := json.Marshal(emptyHistory)
 		if err != nil {
+			utils.Logger.Error("Failed to marshal empty history.", zap.Error(err))
 			return nil, err
 		}
 		err = os.WriteFile(filename, emptyHistoryData, 0644)
 		if err != nil {
+			utils.Logger.Error("Failed to write empty history file.", zap.Error(err))
 			return nil, err
 		}
+		utils.Logger.Info("Created new empty history file.", zap.String("filename", filename))
 		return emptyHistory, nil // Return empty history
 	}
 	if err != nil {
+		utils.Logger.Error("Failed to read history file.", zap.Error(err))
 		return nil, err
 	}
 
 	err = json.Unmarshal(data, &history)
 	if err != nil {
+		utils.Logger.Error("Failed to unmarshal history data.", zap.Error(err))
 		return nil, err
 	}
 
@@ -68,6 +74,7 @@ func GetWatchedVideos(filename string) ([]SearchResultItem, error) {
 		history[i], history[j] = history[j], history[i]
 	}
 
+	utils.Logger.Info("Successfully retrieved and processed watched videos.", zap.Int("count", len(history)))
 	return history, nil
 }
 
@@ -75,15 +82,19 @@ func FeedHistory(selectedVideo SearchResultItem) {
 	currentTime := time.Now().Unix()
 	selectedVideo.ViewedDate = currentTime
 	// Add the selected video to history
-	historyFilePath := GetHistoryFilePath()
+	configDir, err := config.GetConfigDirPath()
+	if err != nil {
+		utils.Logger.Error("Failed to get config path.", zap.Error(err))
+	}
+	historyFilePath := filepath.Join(configDir, "watched_history.json")
 	history, err := GetWatchedVideos(historyFilePath)
 	if err != nil {
-		log.Fatalf("Error loading history: %v", err)
+		utils.Logger.Error("Failed to read history.", zap.Error(err))
 	}
 	history = append(history, selectedVideo)
 	// Save updated history
 	err = SaveHistory(&history, historyFilePath)
 	if err != nil {
-		log.Fatalf("Error saving history: %v", err)
+		utils.Logger.Error("Failed to save history.", zap.Error(err))
 	}
 }
