@@ -1,4 +1,7 @@
-# ytui - YouTube Terminal User Interface
+<div style="display: flex; align-items: center;">
+    <img src="public/gophertube.png" width="150px" style="margin-right: 40px;margin-bottom: 30px"/>
+    <h1>ytui - YouTube Terminal User Interface</h1>
+</div>
 
 `ytui` is a terminal-based tool designed to help you search and
 play YouTube videos directly from your local terminal player.
