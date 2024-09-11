@@ -19,6 +19,7 @@ such as your history, subscribed channels, or by searching YouTube.
 - [Configuration](#configuration)
 - [Files](#files)
 - [Examples](#examples)
+- [Troubleshooting](#troubleshooting)
 - [License](#license)
 
 ## Features
@@ -86,6 +87,7 @@ channels:
     - UCutXfzLC5wrV3SInT_tdY0w
 invidious:
   instance: invidious.jing.rocks
+loglevel: info
 youtube:
   clientid: fsdfsdf
   secretid: ffsdfsdf
@@ -129,6 +131,38 @@ youtube:
    ```sh
    ytui query history
    ```
+
+## Troubleshooting
+
+If you encounter any issues while using this application, you can check the log file for detailed error messages and troubleshooting information. The log file is located at:
+
+```
+$HOME/.config/ytui/ytui.log
+```
+
+### Steps to View the Log
+
+1. **Open a terminal**: Use your terminal application to navigate to the logs.
+
+2. **Display the log**: Run the following command to view the log content:
+
+   ```bash
+   cat $HOME/.config/ytui/ytui.log
+   ```
+
+   This will print the log file's contents directly to your terminal.
+
+3. **Tail the log** _(Optional)_: If the application is still running and you want to monitor log updates in real-time, you can use the `tail` command:
+
+   ```bash
+   tail -f $HOME/.config/ytui/ytui.log
+   ```
+
+4. **Check for errors or warnings**: Look for lines marked with `[ERROR]` or `[WARNING]` to identify issues.
+
+### Reporting Issues
+
+When reporting issues, please include relevant log entries to help with diagnosing the problem. You can copy the log content and include it in your bug report.
 
 ## License
 
