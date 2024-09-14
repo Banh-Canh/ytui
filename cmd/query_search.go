@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
+	"github.com/Banh-Canh/ytui/pkg/download"
 	"github.com/Banh-Canh/ytui/pkg/player"
 	"github.com/Banh-Canh/ytui/pkg/utils"
 	"github.com/Banh-Canh/ytui/pkg/youtube"
@@ -49,10 +50,15 @@ Press enter to run any of the videos.`,
 			os.Exit(0)
 		}
 		videoURL := "https://www.youtube.com/watch?v=" + selectedVideo.VideoID
-		utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
-		player.RunMPV(videoURL)
-		youtube.FeedHistory(selectedVideo)
-		utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
+		if downloadFlag {
+			utils.Logger.Info("Downloading selected video with yt-dlp.", zap.String("video_url", videoURL))
+			download.RunYTDLP(videoURL)
+		} else {
+			utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
+			player.RunMPV(videoURL)
+			youtube.FeedHistory(selectedVideo)
+			utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
+		}
 	},
 }
 

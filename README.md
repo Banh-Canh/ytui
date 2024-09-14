@@ -24,7 +24,6 @@ such as your history, subscribed channels, or by searching YouTube.
 
 ## Features
 
-
 `ytui` offers a wide range of features designed to enhance
 your YouTube experience directly from the terminal. Some of the key features include:
 
@@ -62,7 +61,7 @@ and viewing for command-line users.
 
 ## Requirements
 
-You must have `mpv` installed.
+You must have `mpv` and `yt-dlp` installed.
 
 ## Installation
 
