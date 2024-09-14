@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/Banh-Canh/ytui/pkg/config"
+	"github.com/Banh-Canh/ytui/pkg/download"
 	"github.com/Banh-Canh/ytui/pkg/player"
 	"github.com/Banh-Canh/ytui/pkg/utils"
 	"github.com/Banh-Canh/ytui/pkg/youtube"
@@ -76,10 +77,15 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 		}
 		utils.Logger.Info("Selected video for playback.", zap.String("video_id", selectedVideo.VideoID))
 		videoURL := "https://www.youtube.com/watch?v=" + selectedVideo.VideoID
-		utils.Logger.Info("Playing video in MPV.", zap.String("video_url", videoURL))
-		player.RunMPV(videoURL)
-		youtube.FeedHistory(selectedVideo)
-		utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
+		if downloadFlag {
+			utils.Logger.Info("Downloading selected video with yt-dlp.", zap.String("video_url", videoURL))
+			download.RunYTDLP(videoURL)
+		} else {
+			utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
+			player.RunMPV(videoURL)
+			youtube.FeedHistory(selectedVideo)
+			utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
+		}
 	},
 }
 
