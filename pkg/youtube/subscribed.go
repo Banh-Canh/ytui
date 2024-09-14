@@ -44,7 +44,7 @@ func (yt *YouTubeAPI) GetSubscribedChannels() ([]string, error) {
 	}
 	defer resp.Body.Close()
 
-	utils.Logger.Info("Received response from YouTube API.", zap.String("url", fullURL), zap.Int("status_code", resp.StatusCode))
+	utils.Logger.Debug("Received response from YouTube API.", zap.String("url", fullURL), zap.Int("status_code", resp.StatusCode))
 	if resp.StatusCode != http.StatusOK {
 		utils.Logger.Error(
 			"Received non-200 response from YouTube API.",
@@ -72,7 +72,7 @@ func (yt *YouTubeAPI) GetSubscribedChannels() ([]string, error) {
 		channelIds = append(channelIds, item.Snippet.ResourceId.ChannelId)
 	}
 
-	utils.Logger.Info("Successfully retrieved channel IDs from subscriptions.", zap.Int("channel_count", len(channelIds)))
+	utils.Logger.Debug("Successfully retrieved channel IDs from subscriptions.", zap.Int("channel_count", len(channelIds)))
 	return channelIds, nil
 }
 

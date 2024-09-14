@@ -80,7 +80,7 @@ func getInvidiousInstance() (string, error) {
 		utils.Logger.Error("Invidious instance is not set in the config file.", zap.String("config_file", filepath))
 		return "", fmt.Errorf("invidious.instance not set in the config file")
 	}
-	utils.Logger.Info("Invidious instance retrieved from config.", zap.String("invidious_instance", invidiousInstance))
+	utils.Logger.Debug("Invidious instance retrieved from config.", zap.String("invidious_instance", invidiousInstance))
 	return invidiousInstance, nil
 }
 
@@ -106,7 +106,7 @@ func SearchVideos(query string, subscription bool) (*[]SearchResultItem, error) 
 		defer resp.Body.Close()
 
 		// Log the response status code
-		utils.Logger.Info("Received response from Invidious API.", zap.String("url", baseURL), zap.Int("status_code", resp.StatusCode))
+		utils.Logger.Debug("Received response from Invidious API.", zap.String("url", baseURL), zap.Int("status_code", resp.StatusCode))
 		if resp.StatusCode != http.StatusOK {
 			utils.Logger.Error(
 				"Received non-200 response from Invidious API.",
@@ -165,7 +165,7 @@ func SearchVideos(query string, subscription bool) (*[]SearchResultItem, error) 
 		}
 		defer resp.Body.Close()
 
-		utils.Logger.Info("Received response from Invidious API.", zap.String("url", fullURL), zap.Int("status_code", resp.StatusCode))
+		utils.Logger.Debug("Received response from Invidious API.", zap.String("url", fullURL), zap.Int("status_code", resp.StatusCode))
 		if resp.StatusCode != http.StatusOK {
 			utils.Logger.Error(
 				"Received non-200 response from Invidious API.",
@@ -219,7 +219,7 @@ func SearchVideoInfo(videoID string) (SearchResultItem, error) {
 	}
 	defer resp.Body.Close()
 
-	utils.Logger.Info("Received response from Invidious API.", zap.String("url", baseURL), zap.Int("status_code", resp.StatusCode))
+	utils.Logger.Debug("Received response from Invidious API.", zap.String("url", baseURL), zap.Int("status_code", resp.StatusCode))
 	if resp.StatusCode != http.StatusOK {
 		utils.Logger.Error(
 			"Received non-200 response from Invidious API.",
@@ -251,7 +251,7 @@ func SearchVideoInfo(videoID string) (SearchResultItem, error) {
 		PublishedText: videoInfo.PublishedAt,
 	}
 
-	utils.Logger.Info("Successfully retrieved video info.", zap.String("video_id", videoID), zap.String("title", searchResultItem.Title))
+	utils.Logger.Debug("Successfully retrieved video info.", zap.String("video_id", videoID), zap.String("title", searchResultItem.Title))
 	return searchResultItem, nil
 }
 
@@ -274,7 +274,7 @@ func SearchAuthorInfo(channelId string) (SearchChannelResult, error) {
 	}
 	defer resp.Body.Close()
 
-	utils.Logger.Info("Received response from Invidious API.", zap.String("url", baseURL), zap.Int("status_code", resp.StatusCode))
+	utils.Logger.Debug("Received response from Invidious API.", zap.String("url", baseURL), zap.Int("status_code", resp.StatusCode))
 	if resp.StatusCode != http.StatusOK {
 		utils.Logger.Error(
 			"Received non-200 response from Invidious API.",
@@ -298,7 +298,7 @@ func SearchAuthorInfo(channelId string) (SearchChannelResult, error) {
 		return SearchChannelResult{}, fmt.Errorf("error unmarshalling response JSON: %v", err)
 	}
 
-	utils.Logger.Info(
+	utils.Logger.Debug(
 		"Successfully retrieved channel info.",
 		zap.String("channel_id", channelId),
 		zap.String("channel_name", channelResponse.Author),
