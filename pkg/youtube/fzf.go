@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ktr0731/go-fuzzyfinder"
 	"go.uber.org/zap"
@@ -109,14 +110,16 @@ func getVideoPreview(video SearchResultItem, descriptionCache map[string]string,
 	cacheLock.RLock()
 	description, found := descriptionCache[videoID]
 	cacheLock.RUnlock()
+	duration := time.Duration(video.LengthSeconds) * time.Second
 
 	if !found {
 		// If not cached, show a "fetching" message
 		return fmt.Sprintf(
-			"=========\n\nTitle: %s\n\n=========\n\nAuthor: %s\n\n=========\n\nPublished: %s\n\n=========\n\nViews: %s\n\n=========\n\nURL: %s\n\n=========\n\nDescription: Loading...",
+			"=========\n\nTitle: %s\nAuthor: %s\nPublished: %s\nDuration: %s\nViews: %s\nURL: %s\n\n=========\n\nDescription: Loading...",
 			video.Title,
 			video.Author,
 			video.PublishedText,
+			duration.String(),
 			video.ViewCountText,
 			"https://www.youtube.com/watch?v="+videoID,
 		)
@@ -124,10 +127,11 @@ func getVideoPreview(video SearchResultItem, descriptionCache map[string]string,
 
 	// Show cached description
 	return fmt.Sprintf(
-		"=========\n\nTitle: %s\n\n=========\n\nAuthor: %s\n\n=========\n\nPublished: %s\n\n=========\n\nViews: %s\n\n=========\n\nURL: %s\n\n=========\n\nDescription: \n\n%s",
+		"=========\n\nTitle: %s\nAuthor: %s\nPublished: %s\nDuration: %s\nViews: %s\nURL: %s\n\n=========\n\nDescription: \n\n%s",
 		video.Title,
 		video.Author,
 		video.PublishedText,
+		duration.String(),
 		video.ViewCountText,
 		"https://www.youtube.com/watch?v="+videoID,
 		description,
