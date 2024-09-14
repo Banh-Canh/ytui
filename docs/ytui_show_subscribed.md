@@ -21,6 +21,12 @@ ytui show subscribed [flags]
   -h, --help   help for subscribed
 ```
 
+### Options inherited from parent commands
+
+```
+  -l, --log-level string   Override log level (debug, info, error)
+```
+
 ### SEE ALSO
 
 * [ytui show](ytui_show.md)	 - show items through different patterns
