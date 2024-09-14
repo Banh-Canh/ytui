@@ -15,8 +15,9 @@ ytui [flags]
 ### Options
 
 ```
-  -h, --help      help for ytui
-  -v, --version   Display version information
+  -h, --help               help for ytui
+  -l, --log-level string   Override log level (debug, info, error)
+  -v, --version            Display version information
 ```
 
 ### SEE ALSO

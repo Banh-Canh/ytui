@@ -16,6 +16,12 @@ Run one of the available subcommands.
   -h, --help       help for query
 ```
 
+### Options inherited from parent commands
+
+```
+  -l, --log-level string   Override log level (debug, info, error)
+```
+
 ### SEE ALSO
 
 * [ytui](ytui.md)	 - ytui TUI.

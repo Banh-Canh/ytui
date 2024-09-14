@@ -17,8 +17,9 @@ import (
 )
 
 var (
-	versionFlag bool
-	version     string
+	versionFlag  bool
+	version      string
+	logLevelFlag string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -53,7 +54,15 @@ func initConfig() {
 		fmt.Printf("failed to read config file: %v", err)
 		os.Exit(1)
 	}
-	logLevelStr := viper.GetString("logLevel")
+
+	// Check if the logLevelFlag has been set, if not, fallback to config
+	var logLevelStr string
+	if logLevelFlag != "" {
+		logLevelStr = logLevelFlag // Use the flag if set
+	} else {
+		logLevelStr = viper.GetString("logLevel") // Use config value if flag is not set
+	}
+
 	logLevel := zapcore.InfoLevel //nolint:all
 	switch logLevelStr {
 	case "debug":
@@ -81,4 +90,5 @@ func Execute() {
 
 func init() {
 	RootCmd.Flags().BoolVarP(&versionFlag, "version", "v", false, "Display version information")
+	RootCmd.PersistentFlags().StringVarP(&logLevelFlag, "log-level", "l", "", "Override log level (debug, info, error)")
 }

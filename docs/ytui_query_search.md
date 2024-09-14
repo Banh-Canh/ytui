@@ -22,7 +22,8 @@ ytui query search <text> [flags]
 ### Options inherited from parent commands
 
 ```
-  -d, --download   Download the selected video instead of watching it
+  -d, --download           Download the selected video instead of watching it
+  -l, --log-level string   Override log level (debug, info, error)
 ```
 
 ### SEE ALSO
