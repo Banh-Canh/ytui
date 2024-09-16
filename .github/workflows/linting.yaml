@@ -1,0 +1,33 @@
+name: Go Lint and Format Check
+on:
+  pull_request:
+jobs:
+  lint_and_format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.22.6'
+      - name: Install Tools
+        run: |
+          go install mvdan.cc/gofumpt@latest
+          go install github.com/segmentio/golines@latest
+      - name: Run gofumpt
+        run: |
+          gofumpt -d . | tee gofumpt_output.txt
+          if [ -s gofumpt_output.txt ]; then
+            echo "gofumpt found issues:"
+            cat gofumpt_output.txt
+            exit 1
+          fi
+      - name: Run golines
+        run: |
+          golines --max-len=140 . --dry-run | tee golines_output.txt
+          if [ -s golines_output.txt ]; then
+            echo "golines found lines exceeding 140 characters:"
+            cat golines_output.txt
+            exit 1
+          fi
