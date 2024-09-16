@@ -29,7 +29,7 @@ func SaveHistory(history *[]SearchResultItem, filename string) error {
 		utils.Logger.Error("Failed to marshal history data.", zap.String("filename", filename), zap.Error(err))
 		return err
 	}
-	err = os.WriteFile(filename, data, 0644)
+	err = os.WriteFile(filename, data, 0o644)
 	if err != nil {
 		utils.Logger.Error("Failed to write history data to file.", zap.String("filename", filename), zap.Error(err))
 		return err
@@ -50,7 +50,7 @@ func GetWatchedVideos(filename string) ([]SearchResultItem, error) {
 			utils.Logger.Error("Failed to marshal empty history.", zap.Error(err))
 			return nil, err
 		}
-		err = os.WriteFile(filename, emptyHistoryData, 0644)
+		err = os.WriteFile(filename, emptyHistoryData, 0o644)
 		if err != nil {
 			utils.Logger.Error("Failed to write empty history file.", zap.Error(err))
 			return nil, err
