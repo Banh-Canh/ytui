@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
@@ -68,6 +69,17 @@ func loadToken(filename string) (*oauth2.Token, error) {
 	return token, nil
 }
 
+// isTokenExpired checks if the token is expired.
+func isTokenExpired(token *oauth2.Token) bool {
+	utils.Logger.Debug("Checking if token is expired.")
+	if token == nil || !token.Valid() || time.Now().After(token.Expiry) {
+		utils.Logger.Info("Token is expired or invalid.")
+		return true
+	}
+	utils.Logger.Debug("Token is valid.")
+	return false
+}
+
 // NewYouTubeAPI initializes the YouTube API by handling the OAuth2 flow.
 func NewYouTubeAPI(clientID, clientSecret string) (chan *YouTubeAPI, error) {
 	utils.Logger.Info("Initializing YouTube API.", zap.String("client_id", clientID))
@@ -90,8 +102,13 @@ func NewYouTubeAPI(clientID, clientSecret string) (chan *YouTubeAPI, error) {
 		defer close(apiChan)
 		utils.Logger.Debug("Loading OAuth2 token.")
 		token, err := loadToken(tokenFile)
-		if err != nil {
-			utils.Logger.Error("Failed to load token.", zap.String("token_file", tokenFile), zap.Error(err))
+		if err != nil || isTokenExpired(token) {
+			// If token loading fails or token is expired, start OAuth flow
+			if err != nil {
+				utils.Logger.Error("Failed to load token.", zap.String("token_file", tokenFile), zap.Error(err))
+			} else {
+				utils.Logger.Info("Token is expired. Starting OAuth2 flow.")
+			}
 			utils.Logger.Debug("Starting OAuth2 flow.")
 			if startOAuthErr = startOAuthFlow(config, apiChan, tokenFile); startOAuthErr != nil {
 				utils.Logger.Error("OAuth2 flow failed.", zap.Error(startOAuthErr))
