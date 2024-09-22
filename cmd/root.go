@@ -51,16 +51,15 @@ func initConfig() {
 	configPath := filepath.Join(configDir, "config.yaml")
 	viper.SetConfigFile(configPath)
 	if err := viper.ReadInConfig(); err != nil {
-		fmt.Printf("failed to read config file: %v", err)
+		fmt.Fprintf(os.Stderr, "error, couldn't read config file: %v\n", err)
 		os.Exit(1)
 	}
-
 	// Check if the logLevelFlag has been set, if not, fallback to config
 	var logLevelStr string
 	if logLevelFlag != "" {
 		logLevelStr = logLevelFlag // Use the flag if set
 	} else {
-		logLevelStr = viper.GetString("logLevel") // Use config value if flag is not set
+		logLevelStr = viper.GetString("loglevel") // Use config value if flag is not set
 	}
 
 	logLevel := zapcore.InfoLevel //nolint:all

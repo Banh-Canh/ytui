@@ -5,10 +5,13 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
+	"github.com/Banh-Canh/ytui/pkg/config"
 	"github.com/Banh-Canh/ytui/pkg/download"
 	"github.com/Banh-Canh/ytui/pkg/player"
 	"github.com/Banh-Canh/ytui/pkg/utils"
@@ -31,6 +34,17 @@ Press enter to run any of the videos.`,
 		}
 		query := args[0]
 		utils.Logger.Info("Search command initiated.", zap.String("query", query))
+		configDir, err := config.GetConfigDirPath()
+		if err != nil {
+			utils.Logger.Fatal("Failed to get config path.", zap.Error(err))
+			os.Exit(1)
+		}
+		utils.Logger.Debug("Config directory retrieved.", zap.String("config_dir", configDir))
+		configPath := filepath.Join(configDir, "config.yaml")
+		if err := config.ReadConfig(configPath); err != nil {
+			utils.Logger.Fatal("Failed to read config.", zap.Error(err))
+		}
+		utils.Logger.Debug("Config file read successfully.", zap.String("config_file", configPath))
 
 		result, err := youtube.SearchVideos(query, false)
 		if err != nil {
@@ -52,7 +66,8 @@ Press enter to run any of the videos.`,
 		videoURL := "https://www.youtube.com/watch?v=" + selectedVideo.VideoID
 		if downloadFlag {
 			utils.Logger.Info("Downloading selected video with yt-dlp.", zap.String("video_url", videoURL))
-			download.RunYTDLP(videoURL)
+			downloadDir := viper.GetString("download_dir")
+			download.RunYTDLP(videoURL, downloadDir)
 		} else {
 			utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
 			player.RunMPV(videoURL)

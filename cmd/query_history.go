@@ -9,9 +9,11 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
 	"github.com/Banh-Canh/ytui/pkg/config"
+	"github.com/Banh-Canh/ytui/pkg/download"
 	"github.com/Banh-Canh/ytui/pkg/player"
 	"github.com/Banh-Canh/ytui/pkg/utils"
 	"github.com/Banh-Canh/ytui/pkg/youtube"
@@ -55,10 +57,16 @@ will be stored in there.`,
 			os.Exit(0)
 		}
 		videoURL := "https://www.youtube.com/watch?v=" + selectedVideo.VideoID
-		utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
-		player.RunMPV(videoURL)
-		utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
-		youtube.FeedHistory(selectedVideo)
+		if downloadFlag {
+			utils.Logger.Info("Downloading selected video with yt-dlp.", zap.String("video_url", videoURL))
+			downloadDir := viper.GetString("download_dir")
+			download.RunYTDLP(videoURL, downloadDir)
+		} else {
+			utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
+			player.RunMPV(videoURL)
+			youtube.FeedHistory(selectedVideo)
+			utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
+		}
 	},
 }
 
