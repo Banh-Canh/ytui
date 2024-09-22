@@ -10,18 +10,10 @@ import (
 	"github.com/Banh-Canh/ytui/pkg/utils"
 )
 
-func RunYTDLP(videoPath string) {
+func RunYTDLP(videoPath, outputPath string) {
 	utils.Logger.Debug("Downloading the video with yt-dlp...")
 
-	// Get user's home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		utils.Logger.Error("Failed to get home directory.", zap.Error(err))
-		return
-	}
-
-	outputDir := filepath.Join(homeDir, "Videos", "YouTube")
-	err = os.MkdirAll(outputDir, os.ModePerm)
+	err := os.MkdirAll(outputPath, os.ModePerm)
 	if err != nil {
 		utils.Logger.Error("Failed to create output directory.", zap.Error(err))
 		return
@@ -30,7 +22,7 @@ func RunYTDLP(videoPath string) {
 		"--format=bestvideo[ext=mp4][height<=?2160]+bestaudio[ext=m4a]",
 		"--mark-watched",
 		"--cookies-from-browser=firefox",
-		"-o", filepath.Join(outputDir, "%(title)s.%(ext)s"), // Set output path dynamically
+		"-o", filepath.Join(outputPath, "%(title)s.%(ext)s"), // Set output path dynamically
 		videoPath, // URL or video path
 	}
 	cmd := exec.Command("yt-dlp", args...)

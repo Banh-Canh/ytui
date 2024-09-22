@@ -19,6 +19,14 @@ type Config struct {
 func CreateDefaultConfigFile(filePath string) {
 	// Struct with empty channels list
 	utils.Logger.Info("Config file set.", zap.String("filePath", filePath))
+	// Get user's home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		utils.Logger.Error("Failed to get home directory.", zap.Error(err))
+		return
+	}
+	downloadDir := filepath.Join(homeDir, "Videos", "YouTube")
+	viper.SetDefault("download_dir", downloadDir)
 	viper.SetDefault("logLevel", "info")
 	viper.SetDefault("invidious", map[string]interface{}{
 		"instance": "invidious.jing.rocks",
