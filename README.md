@@ -85,6 +85,7 @@ channels:
   subscribed:
     - UCTt2AnK--mnRmICnf-CCcrw
     - UCutXfzLC5wrV3SInT_tdY0w
+download_dir: ~/Videos/YouTube
 invidious:
   instance: invidious.jing.rocks
 loglevel: info
