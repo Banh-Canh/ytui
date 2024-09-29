@@ -31,6 +31,19 @@ archives:
       - README.md
       - LICENSE
       - docs/*
+aurs:
+  - name: 'ytui-bin'
+    homepage: 'https://github.com/banh-canh/ytui'
+    description: 'ytui is a TUI tool that allows users to query videos on youtube and play them in their local player.'
+    maintainers:
+      - 'Victor Hang <vhvictorhang@gmail.com>'
+    license: 'MIT'
+    private_key: '{{ .Env.AUR_KEY }}'
+    git_url: 'ssh://aur@aur.archlinux.org/ytui-bin.git'
+    commit_author:
+      name: 'Victor Hang'
+      email: 'vhvictorhang@gmail.com'
+    skip_upload: auto
 changelog:
   sort: asc
   filters:
