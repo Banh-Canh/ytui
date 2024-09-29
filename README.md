@@ -1,11 +1,19 @@
-# ytui - YouTube Terminal User Interface
+<div align="center">
+<h1> ytui - YouTube Terminal User Interface</h1>
 
+![star]
+[![Downloads][downloads-badge]][releases]
+![version]
+![aurversion]
+
+</div>
 `ytui` is a terminal-based tool designed to help you search and
 play YouTube videos directly from your local terminal player.
 You can query videos from various sources
 such as your history, subscribed channels, or by searching YouTube.
 
 <div style="text-align: center;margin-top: 20">
+    </br>
     <img src="public/ytui-demo.gif" width="700vw" />
 </div>
 
@@ -197,7 +205,16 @@ When reporting issues, please include relevant log entries to help with diagnosi
 
 ## License
 
-`ytui` is open-source and available under the [MIT License](LICENSE).
+![licence]
+
+`ytui` is open-source and available under the [LICENCE](LICENSE).
 
 For more detailed usage, you can always use `ytui --help` or `ytui <subcommand> --help`
 to get more information about specific commands and flags.
+
+[licence]: https://img.shields.io/github/license/banh-canh/ytui
+[downloads-badge]: https://img.shields.io/github/downloads/banh-canh/ytui/total?logo=github&logoColor=white&style=flat-square
+[releases]: https://github.com/banh-canh/ytui/releases
+[star]: https://img.shields.io/github/stars/banh-canh/ytui
+[version]: https://img.shields.io/github/v/release/banh-canh/ytui
+[aurversion]: https://img.shields.io/aur/version/ytui-bin
