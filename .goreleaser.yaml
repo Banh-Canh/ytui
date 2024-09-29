@@ -44,6 +44,19 @@ aurs:
       name: 'Victor Hang'
       email: 'vhvictorhang@gmail.com'
     skip_upload: auto
+brews:
+  - name: 'ytui'
+    homepage: https://github.com/banh-can/ytui
+    description: 'An interactive Kubernetes log viewer for your terminal.'
+    directory: Formula
+    commit_author:
+      name: 'Victor Hang'
+      email: 'vhvictorhang@gmail.com'
+    commit_msg_template: 'chore: Brew formula update for {{ .ProjectName }} version {{ .Tag }}'
+    repository:
+      owner: banh-canh
+      name: ytui-tap
+      branch: main
 changelog:
   sort: asc
   filters:
