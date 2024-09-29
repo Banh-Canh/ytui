@@ -68,6 +68,36 @@ You must have `mpv` and `yt-dlp` installed.
 To install `ytui`, follow the instructions for your operating system.
 Ensure that you have the required dependencies installed.
 
+1. **Install binary**
+
+   ytui runs on most major platforms. If your platform isn't listed below,
+   please [open an issue][issues].
+
+   Please note that binaries are available on the release pages, you can extract the archives for your
+   platform and manually install it.
+
+   <details>
+   <summary>Linux / WSL</summary>
+
+   > You can use the following package manager:
+   >
+   > | Distribution | Repository  | Instructions                              |
+   > | ------------ | ----------- | ----------------------------------------- |
+   > | _Any_        | [Linuxbrew] | `brew install banh-canh/ytui-tap/formula` |
+   > | Arch Linux   | [AUR]       | `yay -S ytui-bin`                         |
+
+   </details>
+   <details>
+   <summary>macOS</summary>
+
+   > You can use the following package manager:
+   >
+   > | Distribution | Repository  | Instructions                              |
+   > | ------------ | ----------- | ----------------------------------------- |
+   > | _Any_        | [Linuxbrew] | `brew install banh-canh/ytui-tap/formula` |
+
+   </details>
+
 ## Usage
 
 See [Documentations](docs/ytui.md).
