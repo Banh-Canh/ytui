@@ -2,7 +2,6 @@ version: 2
 before:
   hooks:
     - go mod tidy
-    - go run ./scripts/gen_doc.go
 builds:
   - binary: ytui
     main: ./
@@ -17,12 +16,12 @@ builds:
       - arm64
       - arm
     ldflags:
-      - -s -w -X github.com/banh-canh/ytui/cmd.version={{.Version}}
+      - -s -w -X github.com/Banh-Canh/ytui/cmd.version=v{{.Version}}
 archives:
   - format: tar.gz
     # this name template makes the OS and Arch compatible with the results of `uname`.
     name_template: >-
-      {{ .ProjectName }}_ {{- title .Os }}_ {{- if eq .Arch "amd64" }}x86_64 {{- else if eq .Arch "386" }}i386 {{- else }}{{ .Arch }}{{ end }} {{- if .Arm }}v{{ .Arm }}{{ end }}
+      {{ .ProjectName }}_v{{ .Version }}_ {{- title .Os }}_ {{- if eq .Arch "amd64" }}x86_64 {{- else if eq .Arch "386" }}i386 {{- else }}{{ .Arch }}{{ end }} {{- if .Arm }}v{{ .Arm }}{{ end }}
     # use zip for windows archives
     format_overrides:
       - goos: windows
