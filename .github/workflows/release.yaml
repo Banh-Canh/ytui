@@ -21,7 +21,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
-          version: ${{ env.GITHUB_REF_NAME }}
+          version: '~> v2'
           args: release --clean
           workdir: ./
         env:
