@@ -107,7 +107,7 @@ func GetLocalSubscribedChannels() ([]string, error) {
 	return subscribed, nil
 }
 
-func (yt *YouTubeAPI) GetAllSubscribedChannelsVideos() (*[]SearchResultItem, error) {
+func (yt *YouTubeAPI) GetAllSubscribedChannelsVideos(proxyURLString string) (*[]SearchResultItem, error) {
 	utils.Logger.Info("Starting to fetch videos for all subscribed channels.")
 
 	channelIds, err := yt.GetSubscribedChannels()
@@ -121,7 +121,7 @@ func (yt *YouTubeAPI) GetAllSubscribedChannelsVideos() (*[]SearchResultItem, err
 
 	for _, channelId := range channelIds {
 		utils.Logger.Info("Fetching videos for channel.", zap.String("channel_id", channelId))
-		videosResponse, err := SearchVideos(channelId, true)
+		videosResponse, err := SearchVideos(channelId, proxyURLString, true)
 		if err != nil {
 			utils.Logger.Error("Failed to fetch videos for channel.", zap.String("channel_id", channelId), zap.Error(err))
 			return nil, err
@@ -155,7 +155,7 @@ func (yt *YouTubeAPI) GetAllSubscribedChannelsVideos() (*[]SearchResultItem, err
 	return aggregatedResponse, nil
 }
 
-func GetLocalSubscribedChannelsVideos() (*[]SearchResultItem, error) {
+func GetLocalSubscribedChannelsVideos(proxyURLString string) (*[]SearchResultItem, error) {
 	utils.Logger.Info("Starting to fetch videos for local subscribed channels.")
 
 	// Get local subscribed channels
@@ -170,7 +170,7 @@ func GetLocalSubscribedChannelsVideos() (*[]SearchResultItem, error) {
 
 	for _, channelId := range channelIds {
 		utils.Logger.Debug("Fetching videos for channel.", zap.String("channel_id", channelId))
-		videosResponse, err := SearchVideos(channelId, true)
+		videosResponse, err := SearchVideos(channelId, proxyURLString, true)
 		if err != nil {
 			utils.Logger.Error("Failed to fetch videos for channel.", zap.String("channel_id", channelId), zap.Error(err))
 			return nil, err

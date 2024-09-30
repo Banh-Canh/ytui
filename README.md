@@ -127,6 +127,7 @@ download_dir: ~/Videos/YouTube
 history:
   enable: true
 invidious:
+  proxy: ''
   instance: invidious.jing.rocks
 loglevel: info
 youtube:
@@ -140,13 +141,15 @@ youtube:
   specified in the configuration file for subscribed channels.
   If you prefer to use your Youtube user-subscribed channels, set this to `false`.
 
-- `channels.subscribed: []` is a list of channel Ids. To be used with `local: true`.
+- **`channels.subscribed: []`** is a list of channel Ids. To be used with `local: true`.
 
 - **OAuth** - You need to enable OAuth authentication with YouTube
   to access your subscribed channels.
   Ensure that your `clientid` and `secretid` are properly configured.
 
   The following scope is also required: `https://www.googleapis.com/auth/youtube.readonly`
+
+- **`invidious.proxy:`** - Must be set with either `socks5://<socks5_proxy>:1234` or `http://<http_proxy>:4567`. Leave empty to disable.
 
 ## Files
 

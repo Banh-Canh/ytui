@@ -46,7 +46,7 @@ Press enter to run any of the videos.`,
 		}
 		utils.Logger.Debug("Config file read successfully.", zap.String("config_file", configPath))
 
-		result, err := youtube.SearchVideos(query, false)
+		result, err := youtube.SearchVideos(query, viper.GetString("invidious.proxy"), false)
 		if err != nil {
 			utils.Logger.Fatal("Error searching for videos.", zap.Error(err))
 			os.Exit(1)
