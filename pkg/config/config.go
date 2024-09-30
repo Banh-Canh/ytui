@@ -24,6 +24,7 @@ func CreateDefaultConfigFile(filePath string) {
 	viper.SetDefault("download_dir", downloadDir)
 	viper.SetDefault("logLevel", "info")
 	viper.SetDefault("invidious", map[string]interface{}{
+		"proxy":    "",
 		"instance": "invidious.jing.rocks",
 	})
 	viper.SetDefault("history", map[string]interface{}{

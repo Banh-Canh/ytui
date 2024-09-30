@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	"golang.org/x/net/proxy"
 
 	"github.com/Banh-Canh/ytui/pkg/config"
 	"github.com/Banh-Canh/ytui/pkg/utils"
@@ -84,7 +85,7 @@ func getInvidiousInstance() (string, error) {
 	return invidiousInstance, nil
 }
 
-func SearchVideos(query string, subscription bool) (*[]SearchResultItem, error) {
+func SearchVideos(query, proxyURLString string, subscription bool) (*[]SearchResultItem, error) {
 	var baseURL string
 	invidiousInstance, err := getInvidiousInstance()
 	if err != nil {
@@ -98,10 +99,46 @@ func SearchVideos(query string, subscription bool) (*[]SearchResultItem, error) 
 		baseURL = fmt.Sprintf("https://%s/api/v1/channels/%s/videos", invidiousInstance, query)
 		utils.Logger.Debug("Subscription URL for channel videos constructed.", zap.String("subscription_url", baseURL))
 
-		resp, err := http.Get(baseURL)
-		if err != nil {
-			utils.Logger.Error("Error fetching data from Invidious API.", zap.String("url", baseURL), zap.Error(err))
-			return nil, fmt.Errorf("error fetching data from YouTube API: %v", err)
+		var resp *http.Response
+		if proxyURLString != "" {
+			proxyURL, err := url.Parse(proxyURLString)
+			utils.Logger.Info("A proxy is configured and will be used.", zap.String("proxy_url", proxyURLString))
+			if err != nil {
+				return nil, fmt.Errorf("error parsing proxy URL: %v", err)
+			}
+
+			var transport *http.Transport
+			switch proxyURL.Scheme {
+			case "socks5":
+				dialer, err := proxy.FromURL(proxyURL, proxy.Direct)
+				if err != nil {
+					return nil, fmt.Errorf("error creating proxy dialer: %v", err)
+				}
+				transport = &http.Transport{Dial: dialer.Dial}
+
+			case "http", "https":
+				transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
+
+			default:
+				return nil, fmt.Errorf("unsupported proxy scheme: %s", proxyURL.Scheme)
+			}
+
+			// Create a client with the transport
+			client := &http.Client{Transport: transport}
+
+			// Make the request
+			resp, err = client.Get(baseURL)
+			if err != nil {
+				utils.Logger.Error("Error fetching data from Invidious API.", zap.String("url", baseURL), zap.Error(err))
+				return nil, fmt.Errorf("error creating the request: %v", err)
+			}
+		} else {
+			// Make the request without a proxy
+			resp, err = http.Get(baseURL)
+			if err != nil {
+				utils.Logger.Error("Error fetching data from Invidious API.", zap.String("url", baseURL), zap.Error(err))
+				return nil, fmt.Errorf("error fetching data from YouTube API: %v", err)
+			}
 		}
 		defer resp.Body.Close()
 

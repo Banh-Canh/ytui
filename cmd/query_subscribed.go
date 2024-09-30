@@ -56,14 +56,14 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 			}
 			yt := <-apiChan
 			utils.Logger.Info("YouTube API authenticated successfully.")
-			result, err = yt.GetAllSubscribedChannelsVideos()
+			result, err = yt.GetAllSubscribedChannelsVideos(viper.GetString("invidious.proxy"))
 			if err != nil {
 				utils.Logger.Fatal("Failed to get all subscribed channels videos.", zap.Error(err))
 				os.Exit(1)
 			}
 		} else {
 			utils.Logger.Info("Using local configuration for subscribed channels.")
-			result, err = youtube.GetLocalSubscribedChannelsVideos()
+			result, err = youtube.GetLocalSubscribedChannelsVideos(viper.GetString("invidious.proxy"))
 			if err != nil {
 				utils.Logger.Fatal("Failed to get local subscribed channels videos.", zap.Error(err))
 				os.Exit(1)
