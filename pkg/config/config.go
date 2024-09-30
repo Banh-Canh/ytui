@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/adrg/xdg"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
@@ -19,12 +20,7 @@ type Config struct {
 func CreateDefaultConfigFile(filePath string) {
 	// Struct with empty channels list
 	// Get user's home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error, couldn't get home directory: %v\n", err)
-		return
-	}
-	downloadDir := filepath.Join(homeDir, "Videos", "YouTube")
+	downloadDir := xdg.UserDirs.Videos
 	viper.SetDefault("download_dir", downloadDir)
 	viper.SetDefault("logLevel", "info")
 	viper.SetDefault("invidious", map[string]interface{}{
@@ -46,14 +42,8 @@ func CreateDefaultConfigFile(filePath string) {
 }
 
 func GetConfigDirPath() (string, error) {
-	// Get user's home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		utils.Logger.Error("Failed to get user home directory.", zap.Error(err))
-		return "", fmt.Errorf("failed get home directory: %v", err)
-	}
 	// Construct the directory path to the config directory
-	configDirPath := filepath.Join(homeDir, ".config", "ytui")
+	configDirPath := filepath.Join(xdg.ConfigHome, "ytui")
 	if err := os.MkdirAll(configDirPath, os.ModePerm); err != nil {
 		panic(fmt.Sprintf("Failed to create config directory: %v", err))
 	}

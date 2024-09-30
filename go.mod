@@ -3,6 +3,7 @@ module github.com/Banh-Canh/ytui
 go 1.22.6
 
 require (
+	github.com/adrg/xdg v0.5.0
 	github.com/ktr0731/go-fuzzyfinder v0.8.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
