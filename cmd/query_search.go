@@ -71,8 +71,10 @@ Press enter to run any of the videos.`,
 		} else {
 			utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
 			player.RunMPV(videoURL)
-			youtube.FeedHistory(selectedVideo)
-			utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
+			if viper.GetBool("history.enable") {
+				youtube.FeedHistory(selectedVideo)
+				utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
+			}
 		}
 	},
 }
