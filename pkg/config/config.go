@@ -51,6 +51,9 @@ func GetConfigDirPath() (string, error) {
 	}
 	// Construct the directory path to the config directory
 	configDirPath := filepath.Join(homeDir, ".config", "ytui")
+	if err := os.MkdirAll(configDirPath, os.ModePerm); err != nil {
+		panic(fmt.Sprintf("Failed to create config directory: %v", err))
+	}
 	return configDirPath, nil
 }
 
