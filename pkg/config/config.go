@@ -30,6 +30,9 @@ func CreateDefaultConfigFile(filePath string) {
 	viper.SetDefault("invidious", map[string]interface{}{
 		"instance": "invidious.jing.rocks",
 	})
+	viper.SetDefault("history", map[string]interface{}{
+		"enable": true,
+	})
 	viper.SetDefault("youtube", map[string]interface{}{
 		"clientID": "CREATE_IN_YOUTUBE_API_CONSOLE",
 		"secretID": "CREATE_IN_YOUTUBE_API_CONSOLE",

@@ -84,8 +84,10 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 		} else {
 			utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
 			player.RunMPV(videoURL)
-			youtube.FeedHistory(selectedVideo)
-			utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
+			if viper.GetBool("history.enable") {
+				youtube.FeedHistory(selectedVideo)
+				utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
+			}
 		}
 	},
 }

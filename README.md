@@ -124,6 +124,8 @@ channels:
     - UCTt2AnK--mnRmICnf-CCcrw
     - UCutXfzLC5wrV3SInT_tdY0w
 download_dir: ~/Videos/YouTube
+history:
+  enable: true
 invidious:
   instance: invidious.jing.rocks
 loglevel: info
