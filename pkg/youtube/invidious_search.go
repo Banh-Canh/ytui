@@ -86,102 +86,39 @@ func getInvidiousInstance() (string, error) {
 }
 
 func SearchVideos(query, proxyURLString string, subscription bool) (*[]SearchResultItem, error) {
-	var baseURL string
+	if subscription {
+		return searchSubscriptionVideos(query, proxyURLString)
+	} else {
+		return searchVideos(query, proxyURLString)
+	}
+}
+
+func searchSubscriptionVideos(query, proxyURLString string) (*[]SearchResultItem, error) {
 	invidiousInstance, err := getInvidiousInstance()
 	if err != nil {
 		utils.Logger.Error("Failed to get Invidious instance.", zap.Error(err))
 		return nil, err
 	}
-	baseURL = fmt.Sprintf("https://%s/api/v1/search", invidiousInstance)
-	utils.Logger.Debug("Base URL for search constructed.", zap.String("base_url", baseURL))
+	baseURL := fmt.Sprintf("https://%s/api/v1/channels/%s/videos", invidiousInstance, query)
+	utils.Logger.Debug("Subscription URL for channel videos constructed.", zap.String("subscription_url", baseURL))
 
-	if subscription {
-		baseURL = fmt.Sprintf("https://%s/api/v1/channels/%s/videos", invidiousInstance, query)
-		utils.Logger.Debug("Subscription URL for channel videos constructed.", zap.String("subscription_url", baseURL))
-
-		var resp *http.Response
-		if proxyURLString != "" {
-			proxyURL, err := url.Parse(proxyURLString)
-			utils.Logger.Info("A proxy is configured and will be used.", zap.String("proxy_url", proxyURLString))
-			if err != nil {
-				return nil, fmt.Errorf("error parsing proxy URL: %v", err)
-			}
-
-			var transport *http.Transport
-			switch proxyURL.Scheme {
-			case "socks5":
-				dialer, err := proxy.FromURL(proxyURL, proxy.Direct)
-				if err != nil {
-					return nil, fmt.Errorf("error creating proxy dialer: %v", err)
-				}
-				transport = &http.Transport{Dial: dialer.Dial}
-
-			case "http", "https":
-				transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
-
-			default:
-				return nil, fmt.Errorf("unsupported proxy scheme: %s", proxyURL.Scheme)
-			}
-
-			// Create a client with the transport
-			client := &http.Client{Transport: transport}
-
-			// Make the request
-			resp, err = client.Get(baseURL)
-			if err != nil {
-				utils.Logger.Error("Error fetching data from Invidious API.", zap.String("url", baseURL), zap.Error(err))
-				return nil, fmt.Errorf("error creating the request: %v", err)
-			}
-		} else {
-			// Make the request without a proxy
-			resp, err = http.Get(baseURL)
-			if err != nil {
-				utils.Logger.Error("Error fetching data from Invidious API.", zap.String("url", baseURL), zap.Error(err))
-				return nil, fmt.Errorf("error fetching data from YouTube API: %v", err)
-			}
-		}
-		defer resp.Body.Close()
-
-		// Log the response status code
-		utils.Logger.Debug("Received response from Invidious API.", zap.String("url", baseURL), zap.Int("status_code", resp.StatusCode))
-		if resp.StatusCode != http.StatusOK {
-			utils.Logger.Error(
-				"Received non-200 response from Invidious API.",
-				zap.String("url", baseURL),
-				zap.Int("status_code", resp.StatusCode),
-				zap.String("status", resp.Status),
-			)
-			return nil, fmt.Errorf("received non-200 response: %d %s", resp.StatusCode, resp.Status)
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			utils.Logger.Error("Error reading response body from Invidious API.", zap.String("url", baseURL), zap.Error(err))
-			return nil, fmt.Errorf("error reading response body: %v", err)
-		}
-
-		var temp map[string]json.RawMessage
-		if err := json.Unmarshal(body, &temp); err != nil {
-			utils.Logger.Error("Error parsing JSON from Invidious API response.", zap.String("url", baseURL), zap.Error(err))
-			return nil, fmt.Errorf("error parsing JSON: %v", err)
-		}
-
-		var searchResponse []SearchResultItem
-		if err := json.Unmarshal(temp["videos"], &searchResponse); err != nil {
-			utils.Logger.Error("Error parsing 'videos' JSON from Invidious API response.", zap.String("url", baseURL), zap.Error(err))
-			return nil, fmt.Errorf("error parsing JSON: %v", err)
-		}
-
-		// Log the number of videos retrieved
-		utils.Logger.Info("Successfully retrieved videos.", zap.Int("video_count", len(searchResponse)))
-
-		// Sort by Published date in descending order
-		sort.Slice(searchResponse, func(i, j int) bool {
-			return searchResponse[i].Published > searchResponse[j].Published
-		})
-
-		return &searchResponse, nil
+	resp, err := makeRequest(baseURL, proxyURLString)
+	if err != nil {
+		return nil, err
 	}
+	defer resp.Body.Close()
+
+	return processSubscribedVideoResponse(resp, baseURL)
+}
+
+func searchVideos(query, proxyURLString string) (*[]SearchResultItem, error) {
+	invidiousInstance, err := getInvidiousInstance()
+	if err != nil {
+		utils.Logger.Error("Failed to get Invidious instance.", zap.Error(err))
+		return nil, err
+	}
+	baseURL := fmt.Sprintf("https://%s/api/v1/search", invidiousInstance)
+	utils.Logger.Debug("Base URL for search constructed.", zap.String("base_url", baseURL))
 
 	var aggregatedResults []SearchResultItem
 	// Loop through the first 5 pages
@@ -195,41 +132,26 @@ func SearchVideos(query, proxyURLString string, subscription bool) (*[]SearchRes
 		fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
 		utils.Logger.Debug("Constructed search URL.", zap.String("search_url", fullURL))
 
-		resp, err := http.Get(fullURL)
+		resp, err := makeRequest(fullURL, proxyURLString)
 		if err != nil {
-			utils.Logger.Error("Error fetching data from Invidious API.", zap.String("url", fullURL), zap.Error(err))
-			return nil, fmt.Errorf("error fetching data from YouTube API: %v", err)
+			return nil, err
 		}
 		defer resp.Body.Close()
 
-		utils.Logger.Debug("Received response from Invidious API.", zap.String("url", fullURL), zap.Int("status_code", resp.StatusCode))
-		if resp.StatusCode != http.StatusOK {
-			utils.Logger.Error(
-				"Received non-200 response from Invidious API.",
-				zap.String("url", fullURL),
-				zap.Int("status_code", resp.StatusCode),
-				zap.String("status", resp.Status),
-			)
-			return nil, fmt.Errorf("received non-200 response: %d %s", resp.StatusCode, resp.Status)
-		}
-
-		body, err := io.ReadAll(resp.Body)
+		searchResponse, err := processResponse(resp, fullURL)
 		if err != nil {
-			utils.Logger.Error("Error reading response body from Invidious API.", zap.String("url", fullURL), zap.Error(err))
-			return nil, fmt.Errorf("error reading response body: %v", err)
-		}
-
-		var searchResponse []SearchResultItem
-		if err := json.Unmarshal(body, &searchResponse); err != nil {
-			utils.Logger.Error("Error parsing JSON from Invidious API response.", zap.String("url", fullURL), zap.Error(err))
-			return nil, fmt.Errorf("error parsing JSON: %v", err)
+			return nil, err
 		}
 
 		// Append the current page results to the aggregated results
-		aggregatedResults = append(aggregatedResults, searchResponse...)
+		aggregatedResults = append(aggregatedResults, *searchResponse...)
 
 		// Log the number of results retrieved for the current page
-		utils.Logger.Debug("Page results added to aggregated results.", zap.Int("page", page), zap.Int("result_count", len(searchResponse)))
+		utils.Logger.Debug(
+			"Page results added to aggregated results.",
+			zap.Int("page", page),
+			zap.Int("result_count", len(*searchResponse)),
+		)
 	}
 
 	// Log the total number of aggregated results
@@ -238,7 +160,128 @@ func SearchVideos(query, proxyURLString string, subscription bool) (*[]SearchRes
 	return &aggregatedResults, nil
 }
 
-func SearchVideoInfo(videoID string) (SearchResultItem, error) {
+func makeRequest(fullURL, proxyURLString string) (*http.Response, error) {
+	if proxyURLString != "" {
+		return makeRequestWithProxy(fullURL, proxyURLString)
+	} else {
+		return http.Get(fullURL)
+	}
+}
+
+func makeRequestWithProxy(fullURL, proxyURLString string) (*http.Response, error) {
+	proxyURL, err := url.Parse(proxyURLString)
+	utils.Logger.Info("A proxy is configured and will be used.", zap.String("proxy_url", proxyURLString))
+	if err != nil {
+		return nil, fmt.Errorf("error parsing proxy URL: %v", err)
+	}
+
+	var transport *http.Transport
+	switch proxyURL.Scheme {
+	case "socks5":
+		dialer, err := proxy.FromURL(proxyURL, proxy.Direct)
+		if err != nil {
+			return nil, fmt.Errorf("error creating proxy dialer: %v", err)
+		}
+		transport = &http.Transport{Dial: dialer.Dial}
+
+	case "http", "https":
+		transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
+
+	default:
+		return nil, fmt.Errorf("unsupported proxy scheme: %s", proxyURL.Scheme)
+	}
+
+	// Create a client with the transport
+	client := &http.Client{Transport: transport}
+
+	// Make the request
+	resp, err := client.Get(fullURL)
+	if err != nil {
+		utils.Logger.Error("Error fetching data from Invidious API.", zap.String("url", fullURL), zap.Error(err))
+		return nil, fmt.Errorf("error creating the request: %v", err)
+	}
+	return resp, nil
+}
+
+func processResponse(resp *http.Response, fullURL string) (*[]SearchResultItem, error) {
+	// Log the response status code
+	utils.Logger.Debug("Received response from Invidious API.", zap.String("url", fullURL), zap.Int("status_code", resp.StatusCode))
+	if resp.StatusCode != http.StatusOK {
+		utils.Logger.Error(
+			"Received non-200 response from Invidious API.",
+			zap.String("url", fullURL),
+			zap.Int("status_code", resp.StatusCode),
+			zap.String("status", resp.Status),
+		)
+		return nil, fmt.Errorf("received non-200 response: %d %s", resp.StatusCode, resp.Status)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		utils.Logger.Error("Error reading response body from Invidious API.", zap.String("url", fullURL), zap.Error(err))
+		return nil, fmt.Errorf("error reading response body: %v", err)
+	}
+
+	var searchResponse []SearchResultItem
+	if err := json.Unmarshal(body, &searchResponse); err != nil {
+		utils.Logger.Error("Error parsing 'videos' JSON from Invidious API response.", zap.String("url", fullURL), zap.Error(err))
+		return nil, fmt.Errorf("error parsing JSON: %v", err)
+	}
+
+	// Log the number of videos retrieved
+	utils.Logger.Info("Successfully retrieved videos.", zap.Int("video_count", len(searchResponse)))
+
+	// Sort by Published date in descending order
+	sort.Slice(searchResponse, func(i, j int) bool {
+		return searchResponse[i].Published > searchResponse[j].Published
+	})
+
+	return &searchResponse, nil
+}
+
+func processSubscribedVideoResponse(resp *http.Response, fullURL string) (*[]SearchResultItem, error) {
+	// Log the response status code
+	utils.Logger.Debug("Received response from Invidious API.", zap.String("url", fullURL), zap.Int("status_code", resp.StatusCode))
+	if resp.StatusCode != http.StatusOK {
+		utils.Logger.Error(
+			"Received non-200 response from Invidious API.",
+			zap.String("url", fullURL),
+			zap.Int("status_code", resp.StatusCode),
+			zap.String("status", resp.Status),
+		)
+		return nil, fmt.Errorf("received non-200 response: %d %s", resp.StatusCode, resp.Status)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		utils.Logger.Error("Error reading response body from Invidious API.", zap.String("url", fullURL), zap.Error(err))
+		return nil, fmt.Errorf("error reading response body: %v", err)
+	}
+
+	var temp map[string]json.RawMessage
+	if err := json.Unmarshal(body, &temp); err != nil {
+		utils.Logger.Error("Error parsing JSON from Invidious API response.", zap.String("url", fullURL), zap.Error(err))
+		return nil, fmt.Errorf("error parsing JSON: %v", err)
+	}
+
+	var searchResponse []SearchResultItem
+	if err := json.Unmarshal(temp["videos"], &searchResponse); err != nil {
+		utils.Logger.Error("Error parsing 'videos' JSON from Invidious API response.", zap.String("url", fullURL), zap.Error(err))
+		return nil, fmt.Errorf("error parsing JSON: %v", err)
+	}
+
+	// Log the number of videos retrieved
+	utils.Logger.Info("Successfully retrieved videos.", zap.Int("video_count", len(searchResponse)))
+
+	// Sort by Published date in descending order
+	sort.Slice(searchResponse, func(i, j int) bool {
+		return searchResponse[i].Published > searchResponse[j].Published
+	})
+
+	return &searchResponse, nil
+}
+
+func SearchVideoInfo(videoID, proxyURLString string) (SearchResultItem, error) {
 	invidiousInstance, err := getInvidiousInstance()
 	if err != nil {
 		utils.Logger.Error("Failed to get Invidious instance.", zap.Error(err))
@@ -249,23 +292,11 @@ func SearchVideoInfo(videoID string) (SearchResultItem, error) {
 	baseURL := fmt.Sprintf("https://%s/api/v1/videos/%s", invidiousInstance, videoID)
 	utils.Logger.Debug("Constructed URL for video info.", zap.String("url", baseURL))
 
-	resp, err := http.Get(baseURL)
+	resp, err := makeRequest(baseURL, proxyURLString)
 	if err != nil {
-		utils.Logger.Error("Error fetching data from Invidious API.", zap.String("url", baseURL), zap.Error(err))
-		return SearchResultItem{}, fmt.Errorf("error fetching data from YouTube API: %v", err)
+		return SearchResultItem{}, err
 	}
 	defer resp.Body.Close()
-
-	utils.Logger.Debug("Received response from Invidious API.", zap.String("url", baseURL), zap.Int("status_code", resp.StatusCode))
-	if resp.StatusCode != http.StatusOK {
-		utils.Logger.Error(
-			"Received non-200 response from Invidious API.",
-			zap.String("url", baseURL),
-			zap.Int("status_code", resp.StatusCode),
-			zap.String("status", resp.Status),
-		)
-		return SearchResultItem{}, fmt.Errorf("received non-200 response: %d %s", resp.StatusCode, resp.Status)
-	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -292,7 +323,7 @@ func SearchVideoInfo(videoID string) (SearchResultItem, error) {
 	return searchResultItem, nil
 }
 
-func SearchAuthorInfo(channelId string) (SearchChannelResult, error) {
+func SearchAuthorInfo(channelId, proxyURLString string) (SearchChannelResult, error) {
 	invidiousInstance, err := getInvidiousInstance()
 	if err != nil {
 		utils.Logger.Error("Failed to get Invidious instance.", zap.Error(err))
@@ -304,23 +335,11 @@ func SearchAuthorInfo(channelId string) (SearchChannelResult, error) {
 	utils.Logger.Debug("Constructed URL for channel info.", zap.String("url", baseURL))
 
 	// Perform the GET request to the Invidious API
-	resp, err := http.Get(baseURL)
+	resp, err := makeRequest(baseURL, proxyURLString)
 	if err != nil {
-		utils.Logger.Error("Error fetching data from Invidious API.", zap.String("url", baseURL), zap.Error(err))
-		return SearchChannelResult{}, fmt.Errorf("error fetching data from Invidious API: %v", err)
+		return SearchChannelResult{}, err
 	}
 	defer resp.Body.Close()
-
-	utils.Logger.Debug("Received response from Invidious API.", zap.String("url", baseURL), zap.Int("status_code", resp.StatusCode))
-	if resp.StatusCode != http.StatusOK {
-		utils.Logger.Error(
-			"Received non-200 response from Invidious API.",
-			zap.String("url", baseURL),
-			zap.Int("status_code", resp.StatusCode),
-			zap.String("status", resp.Status),
-		)
-		return SearchChannelResult{}, fmt.Errorf("received non-200 response: %d %s", resp.StatusCode, resp.Status)
-	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -344,13 +363,13 @@ func SearchAuthorInfo(channelId string) (SearchChannelResult, error) {
 }
 
 // Function to fetch author information for a list of channel IDs
-func GetAllChannelsInfo(channelIds []string) ([]SearchChannelResult, error) {
+func GetAllChannelsInfo(channelIds []string, proxyURLString string) ([]SearchChannelResult, error) {
 	utils.Logger.Debug("Starting to fetch info for multiple channels.", zap.Int("channel_count", len(channelIds)))
 
 	var results []SearchChannelResult
 	for _, channelId := range channelIds {
 		utils.Logger.Debug("Fetching info for channel.", zap.String("channel_id", channelId))
-		result, err := SearchAuthorInfo(channelId)
+		result, err := SearchAuthorInfo(channelId, proxyURLString)
 		if err != nil {
 			utils.Logger.Error("Failed to fetch info for channel ID.", zap.String("channel_id", channelId), zap.Error(err))
 			return nil, fmt.Errorf("failed to fetch info for channel ID %s: %v", channelId, err)

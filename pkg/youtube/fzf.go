@@ -17,6 +17,7 @@ func fetchDescriptionsInBackground(
 	videoData []SearchResultItem,
 	descriptionCache map[string]string,
 	cacheLock *sync.RWMutex,
+	proxyURLString string,
 ) {
 	go func() {
 		for {
@@ -40,7 +41,7 @@ func fetchDescriptionsInBackground(
 				}
 
 				// Fetch the video description with retries
-				if err := fetchAndCacheDescription(video, descriptionCache, cacheLock); err != nil {
+				if err := fetchAndCacheDescription(video, descriptionCache, cacheLock, proxyURLString); err != nil {
 					utils.Logger.Error("Failed to fetch description.", zap.Error(err))
 					continue
 				}
@@ -73,9 +74,14 @@ func cleanDescription(description string) string {
 }
 
 // Fetches a single video description and stores it in cache.
-func fetchAndCacheDescription(video SearchResultItem, descriptionCache map[string]string, cacheLock *sync.RWMutex) error {
+func fetchAndCacheDescription(
+	video SearchResultItem,
+	descriptionCache map[string]string,
+	cacheLock *sync.RWMutex,
+	proxyURLString string,
+) error {
 	for {
-		videoInfo, err := SearchVideoInfo(video.VideoID)
+		videoInfo, err := SearchVideoInfo(video.VideoID, proxyURLString)
 		if err != nil {
 			utils.Logger.Info("Fetching description failed. Retrying...", zap.String("videoTitle", video.Title), zap.Error(err))
 		}
@@ -139,13 +145,13 @@ func getVideoPreview(video SearchResultItem, descriptionCache map[string]string,
 }
 
 // Handles the interactive menu for video selection. Powered by fzf-like
-func YoutubeResultMenu(videoData []SearchResultItem) (SearchResultItem, error) {
+func YoutubeResultMenu(videoData []SearchResultItem, proxyURLString string) (SearchResultItem, error) {
 	// Cache to store video descriptions
 	descriptionCache := make(map[string]string)
 	cacheLock := sync.RWMutex{} // For thread-safe cache access
 
 	// Start background fetching of descriptions
-	fetchDescriptionsInBackground(videoData, descriptionCache, &cacheLock)
+	fetchDescriptionsInBackground(videoData, descriptionCache, &cacheLock, proxyURLString)
 
 	utils.Logger.Info("Opening search menu.")
 	idx, err := fuzzyfinder.Find(

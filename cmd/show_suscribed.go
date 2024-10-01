@@ -66,7 +66,7 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 			channelList = viper.GetStringSlice("channels.subscribed")
 			utils.Logger.Info("Retrieved local subscribed channels.", zap.Int("channel_count", len(channelList)))
 		}
-		channels, err := youtube.GetAllChannelsInfo(channelList)
+		channels, err := youtube.GetAllChannelsInfo(channelList, viper.GetString("invidious.proxy"))
 		if err != nil {
 			utils.Logger.Fatal("Failed to get all channels data.", zap.Error(err))
 			os.Exit(1)
