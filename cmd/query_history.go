@@ -51,7 +51,7 @@ will be stored in there.`,
 			os.Exit(0)
 		}
 		utils.Logger.Info("Videos found in history.", zap.Int("video_count", len(result)))
-		selectedVideo, err := youtube.YoutubeResultMenu(result)
+		selectedVideo, err := youtube.YoutubeResultMenu(result, viper.GetString("invidious.proxy"))
 		if err != nil {
 			utils.Logger.Info("FZF menu closed.")
 			os.Exit(0)

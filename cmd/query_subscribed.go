@@ -70,7 +70,7 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 			}
 		}
 		utils.Logger.Info("Retrieved videos from subscribed channels.", zap.Int("video_count", len(*result)))
-		selectedVideo, err := youtube.YoutubeResultMenu(*result)
+		selectedVideo, err := youtube.YoutubeResultMenu(*result, viper.GetString("invidious.proxy"))
 		if err != nil {
 			utils.Logger.Info("FZF menu closed.")
 			os.Exit(0)
