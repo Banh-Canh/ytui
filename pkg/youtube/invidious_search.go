@@ -6,14 +6,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"sort"
 
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"golang.org/x/net/proxy"
 
-	"github.com/Banh-Canh/ytui/pkg/config"
 	"github.com/Banh-Canh/ytui/pkg/utils"
 )
 
@@ -62,44 +59,16 @@ type SearchChannelResult struct {
 // YouTubeSearchResponse represents the response from a YouTube search
 type YouTubeSearchResponse []SearchResultItem
 
-func getInvidiousInstance() (string, error) {
-	// Read config for instance
-	configDir, err := config.GetConfigDirPath()
-	if err != nil {
-		utils.Logger.Error("Failed to get config directory path.", zap.Error(err))
-		return "", fmt.Errorf("failed to get config path: %v", err)
-	}
-	filepath := filepath.Join(configDir, "config.yaml")
-	viper.SetConfigFile(filepath)
-	// Read the config file
-	if err := viper.ReadInConfig(); err != nil {
-		utils.Logger.Error("Failed to read config file.", zap.String("config_file", filepath), zap.Error(err))
-		return "", fmt.Errorf("failed to read config file: %v", err)
-	}
-	invidiousInstance := viper.GetString("invidious.instance")
-	if invidiousInstance == "" {
-		utils.Logger.Error("Invidious instance is not set in the config file.", zap.String("config_file", filepath))
-		return "", fmt.Errorf("invidious.instance not set in the config file")
-	}
-	utils.Logger.Debug("Invidious instance retrieved from config.", zap.String("invidious_instance", invidiousInstance))
-	return invidiousInstance, nil
-}
-
-func SearchVideos(query, proxyURLString string, subscription bool) (*[]SearchResultItem, error) {
+func SearchVideos(query, invidiousInstance, proxyURLString string, subscription bool) (*[]SearchResultItem, error) {
 	if subscription {
-		return searchSubscriptionVideos(query, proxyURLString)
+		return searchSubscriptionVideos(query, invidiousInstance, proxyURLString)
 	} else {
-		return searchVideos(query, proxyURLString)
+		return searchVideos(query, invidiousInstance, proxyURLString)
 	}
 }
 
-func searchSubscriptionVideos(query, proxyURLString string) (*[]SearchResultItem, error) {
-	invidiousInstance, err := getInvidiousInstance()
-	if err != nil {
-		utils.Logger.Error("Failed to get Invidious instance.", zap.Error(err))
-		return nil, err
-	}
-	baseURL := fmt.Sprintf("https://%s/api/v1/channels/%s/videos", invidiousInstance, query)
+func searchSubscriptionVideos(query, invidiousInstance, proxyURLString string) (*[]SearchResultItem, error) {
+	baseURL := fmt.Sprintf("%s/api/v1/channels/%s/videos", invidiousInstance, query)
 	utils.Logger.Debug("Subscription URL for channel videos constructed.", zap.String("subscription_url", baseURL))
 
 	resp, err := makeRequest(baseURL, proxyURLString)
@@ -111,13 +80,8 @@ func searchSubscriptionVideos(query, proxyURLString string) (*[]SearchResultItem
 	return processSubscribedVideoResponse(resp, baseURL)
 }
 
-func searchVideos(query, proxyURLString string) (*[]SearchResultItem, error) {
-	invidiousInstance, err := getInvidiousInstance()
-	if err != nil {
-		utils.Logger.Error("Failed to get Invidious instance.", zap.Error(err))
-		return nil, err
-	}
-	baseURL := fmt.Sprintf("https://%s/api/v1/search", invidiousInstance)
+func searchVideos(query, invidiousInstance, proxyURLString string) (*[]SearchResultItem, error) {
+	baseURL := fmt.Sprintf("%s/api/v1/search", invidiousInstance)
 	utils.Logger.Debug("Base URL for search constructed.", zap.String("base_url", baseURL))
 
 	var aggregatedResults []SearchResultItem
@@ -281,15 +245,10 @@ func processSubscribedVideoResponse(resp *http.Response, fullURL string) (*[]Sea
 	return &searchResponse, nil
 }
 
-func SearchVideoInfo(videoID, proxyURLString string) (SearchResultItem, error) {
-	invidiousInstance, err := getInvidiousInstance()
-	if err != nil {
-		utils.Logger.Error("Failed to get Invidious instance.", zap.Error(err))
-		return SearchResultItem{}, err
-	}
+func SearchVideoInfo(videoID, invidiousInstance, proxyURLString string) (SearchResultItem, error) {
 	utils.Logger.Debug("Invidious instance retrieved.", zap.String("invidious_instance", invidiousInstance))
 
-	baseURL := fmt.Sprintf("https://%s/api/v1/videos/%s", invidiousInstance, videoID)
+	baseURL := fmt.Sprintf("%s/api/v1/videos/%s", invidiousInstance, videoID)
 	utils.Logger.Debug("Constructed URL for video info.", zap.String("url", baseURL))
 
 	resp, err := makeRequest(baseURL, proxyURLString)
@@ -323,15 +282,10 @@ func SearchVideoInfo(videoID, proxyURLString string) (SearchResultItem, error) {
 	return searchResultItem, nil
 }
 
-func SearchAuthorInfo(channelId, proxyURLString string) (SearchChannelResult, error) {
-	invidiousInstance, err := getInvidiousInstance()
-	if err != nil {
-		utils.Logger.Error("Failed to get Invidious instance.", zap.Error(err))
-		return SearchChannelResult{}, err
-	}
+func SearchAuthorInfo(channelId, invidiousInstance, proxyURLString string) (SearchChannelResult, error) {
 	utils.Logger.Debug("Invidious instance retrieved.", zap.String("invidious_instance", invidiousInstance))
 
-	baseURL := fmt.Sprintf("https://%s/api/v1/channels/%s", invidiousInstance, channelId)
+	baseURL := fmt.Sprintf("%s/api/v1/channels/%s", invidiousInstance, channelId)
 	utils.Logger.Debug("Constructed URL for channel info.", zap.String("url", baseURL))
 
 	// Perform the GET request to the Invidious API
@@ -363,13 +317,13 @@ func SearchAuthorInfo(channelId, proxyURLString string) (SearchChannelResult, er
 }
 
 // Function to fetch author information for a list of channel IDs
-func GetAllChannelsInfo(channelIds []string, proxyURLString string) ([]SearchChannelResult, error) {
+func GetAllChannelsInfo(channelIds []string, invidiousInstance, proxyURLString string) ([]SearchChannelResult, error) {
 	utils.Logger.Debug("Starting to fetch info for multiple channels.", zap.Int("channel_count", len(channelIds)))
 
 	var results []SearchChannelResult
 	for _, channelId := range channelIds {
 		utils.Logger.Debug("Fetching info for channel.", zap.String("channel_id", channelId))
-		result, err := SearchAuthorInfo(channelId, proxyURLString)
+		result, err := SearchAuthorInfo(channelId, invidiousInstance, proxyURLString)
 		if err != nil {
 			utils.Logger.Error("Failed to fetch info for channel ID.", zap.String("channel_id", channelId), zap.Error(err))
 			return nil, fmt.Errorf("failed to fetch info for channel ID %s: %v", channelId, err)

@@ -18,6 +18,10 @@ import (
 	"github.com/Banh-Canh/ytui/pkg/youtube"
 )
 
+const (
+	YoutubeSubscriptionsURL = "https://www.googleapis.com/youtube/v3/subscriptions"
+)
+
 // subscribedCmd represents the subscribed command
 var showSubscribedCmd = &cobra.Command{
 	Use:   "subscribed",
@@ -56,7 +60,7 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 			yt := <-apiChan
 			utils.Logger.Info("YouTube API authenticated successfully.")
 
-			channelList, err = yt.GetSubscribedChannels()
+			channelList, err = yt.GetSubscribedChannels(YoutubeSubscriptionsURL)
 			if err != nil {
 				utils.Logger.Fatal("Failed to retrieve channels list.", zap.Error(err))
 				os.Exit(1)
@@ -66,7 +70,7 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 			channelList = viper.GetStringSlice("channels.subscribed")
 			utils.Logger.Info("Retrieved local subscribed channels.", zap.Int("channel_count", len(channelList)))
 		}
-		channels, err := youtube.GetAllChannelsInfo(channelList, viper.GetString("invidious.proxy"))
+		channels, err := youtube.GetAllChannelsInfo(channelList, viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"))
 		if err != nil {
 			utils.Logger.Fatal("Failed to get all channels data.", zap.Error(err))
 			os.Exit(1)

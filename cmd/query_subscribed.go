@@ -56,21 +56,21 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 			}
 			yt := <-apiChan
 			utils.Logger.Info("YouTube API authenticated successfully.")
-			result, err = yt.GetAllSubscribedChannelsVideos(viper.GetString("invidious.proxy"))
+			result, err = yt.GetAllSubscribedChannelsVideos(viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"))
 			if err != nil {
 				utils.Logger.Fatal("Failed to get all subscribed channels videos.", zap.Error(err))
 				os.Exit(1)
 			}
 		} else {
 			utils.Logger.Info("Using local configuration for subscribed channels.")
-			result, err = youtube.GetLocalSubscribedChannelsVideos(viper.GetString("invidious.proxy"))
+			result, err = youtube.GetLocalSubscribedChannelsVideos(viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"), viper.GetStringSlice("channels.subscribed"))
 			if err != nil {
 				utils.Logger.Fatal("Failed to get local subscribed channels videos.", zap.Error(err))
 				os.Exit(1)
 			}
 		}
 		utils.Logger.Info("Retrieved videos from subscribed channels.", zap.Int("video_count", len(*result)))
-		selectedVideo, err := youtube.YoutubeResultMenu(*result, viper.GetString("invidious.proxy"))
+		selectedVideo, err := youtube.YoutubeResultMenu(*result, viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"))
 		if err != nil {
 			utils.Logger.Info("FZF menu closed.")
 			os.Exit(0)
@@ -85,7 +85,8 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 			utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
 			player.RunMPV(videoURL)
 			if viper.GetBool("history.enable") {
-				youtube.FeedHistory(selectedVideo)
+				historyFilePath := filepath.Join(configDir, "watched_history.json")
+				youtube.FeedHistory(selectedVideo, historyFilePath)
 				utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
 			}
 		}

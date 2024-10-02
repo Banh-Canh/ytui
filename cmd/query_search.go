@@ -46,7 +46,7 @@ Press enter to run any of the videos.`,
 		}
 		utils.Logger.Debug("Config file read successfully.", zap.String("config_file", configPath))
 
-		result, err := youtube.SearchVideos(query, viper.GetString("invidious.proxy"), false)
+		result, err := youtube.SearchVideos(query, viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"), false)
 		if err != nil {
 			utils.Logger.Fatal("Error searching for videos.", zap.Error(err))
 			os.Exit(1)
@@ -58,7 +58,7 @@ Press enter to run any of the videos.`,
 		}
 
 		utils.Logger.Info("Videos found.", zap.Int("video_count", len(*result)))
-		selectedVideo, err := youtube.YoutubeResultMenu(*result, viper.GetString("invidious.proxy"))
+		selectedVideo, err := youtube.YoutubeResultMenu(*result, viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"))
 		if err != nil {
 			utils.Logger.Info("FZF menu closed.")
 			os.Exit(0)
@@ -72,7 +72,8 @@ Press enter to run any of the videos.`,
 			utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
 			player.RunMPV(videoURL)
 			if viper.GetBool("history.enable") {
-				youtube.FeedHistory(selectedVideo)
+				historyFilePath := filepath.Join(configDir, "watched_history.json")
+				youtube.FeedHistory(selectedVideo, historyFilePath)
 				utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
 			}
 		}

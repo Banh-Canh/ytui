@@ -51,7 +51,7 @@ will be stored in there.`,
 			os.Exit(0)
 		}
 		utils.Logger.Info("Videos found in history.", zap.Int("video_count", len(result)))
-		selectedVideo, err := youtube.YoutubeResultMenu(result, viper.GetString("invidious.proxy"))
+		selectedVideo, err := youtube.YoutubeResultMenu(result, viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"))
 		if err != nil {
 			utils.Logger.Info("FZF menu closed.")
 			os.Exit(0)
@@ -65,7 +65,8 @@ will be stored in there.`,
 			utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
 			player.RunMPV(videoURL)
 			if viper.GetBool("history.enable") {
-				youtube.FeedHistory(selectedVideo)
+				historyFilePath := filepath.Join(configDir, "watched_history.json")
+				youtube.FeedHistory(selectedVideo, historyFilePath)
 				utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
 			}
 		}
