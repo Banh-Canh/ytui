@@ -8,7 +8,6 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/Banh-Canh/ytui/pkg/config"
 	"github.com/Banh-Canh/ytui/pkg/utils"
 )
 
@@ -78,15 +77,9 @@ func GetWatchedVideos(filename string) ([]SearchResultItem, error) {
 	return history, nil
 }
 
-func FeedHistory(selectedVideo SearchResultItem) {
+func FeedHistory(selectedVideo SearchResultItem, historyFilePath string) {
 	currentTime := time.Now().Unix()
 	selectedVideo.ViewedDate = currentTime
-	// Add the selected video to history
-	configDir, err := config.GetConfigDirPath()
-	if err != nil {
-		utils.Logger.Error("Failed to get config path.", zap.Error(err))
-	}
-	historyFilePath := filepath.Join(configDir, "watched_history.json")
 	history, err := GetWatchedVideos(historyFilePath)
 	if err != nil {
 		utils.Logger.Error("Failed to read history.", zap.Error(err))
