@@ -171,6 +171,7 @@ func startOAuthServer(config *oauth2.Config, apiChan chan *YouTubeAPI, tokenFile
 }
 
 func handleOAuthCallback(config *oauth2.Config, w http.ResponseWriter, r *http.Request, apiChan chan *YouTubeAPI, tokenFile string) {
+	// Retrieve the authorization code from the request
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		utils.Logger.Warn("Authorization code not found in request.")
@@ -180,21 +181,42 @@ func handleOAuthCallback(config *oauth2.Config, w http.ResponseWriter, r *http.R
 
 	utils.Logger.Debug("Exchanging authorization code for token.", zap.String("code", code))
 
+	// Exchange the authorization code for an OAuth token
 	token, err := config.Exchange(context.Background(), code)
 	if err != nil {
 		utils.Logger.Error("Failed to exchange authorization code for token.", zap.Error(err))
-		http.Error(w, "Failed to exchange token", http.StatusInternalServerError)
+		http.Error(w, "Failed to exchange authorization code for token", http.StatusInternalServerError)
 		return
 	}
 
-	utils.Logger.Info("Token exchanged successfully. Saving token.")
+	utils.Logger.Info("Token exchanged successfully. Saving token to file.")
+	// Save the token to a file for future use
 	if err := saveToken(tokenFile, token); err != nil {
 		utils.Logger.Error("Failed to save token.", zap.Error(err))
 		http.Error(w, "Failed to save token", http.StatusInternalServerError)
 		return
 	}
 
-	utils.Logger.Info("OAuth2 authorization successful. Client information sent.")
+	// Send the client (with the token) through the channel for use in the application
+	utils.Logger.Info("OAuth2 authorization successful. Sending client to API channel.")
 	apiChan <- &YouTubeAPI{Client: config.Client(context.Background(), token)}
 	close(apiChan)
+
+	// Provide the user with feedback and instruct them to return to the application
+	w.Header().Set("Content-Type", "text/html")
+	_, _ = w.Write([]byte(`
+		<!DOCTYPE html>
+		<html lang="en">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>Authentication Complete</title>
+		</head>
+		<body>
+			<h1>Authentication Successful</h1>
+			<p>You have successfully authenticated with your Google account.</p>
+			<p>You can now return to the application to continue.</p>
+		</body>
+		</html>
+	`))
 }
