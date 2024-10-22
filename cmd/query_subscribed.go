@@ -78,8 +78,14 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 		utils.Logger.Info("Selected video for playback.", zap.String("video_id", selectedVideo.VideoID))
 		videoURL := "https://www.youtube.com/watch?v=" + selectedVideo.VideoID
 		if downloadFlag {
+			var downloadDirStr string
+			if downloadDirFlag != "" {
+				downloadDirStr = downloadDirFlag // Use the flag if set
+			} else {
+				downloadDirStr = viper.GetString("download_dir") // Use config value if flag is not set
+			}
 			utils.Logger.Info("Downloading selected video with yt-dlp.", zap.String("video_url", videoURL))
-			downloadDir := viper.GetString("download_dir")
+			downloadDir := downloadDirStr
 			download.RunYTDLP(videoURL, downloadDir)
 		} else {
 			utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
