@@ -7,7 +7,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var downloadFlag bool
+var (
+	downloadFlag    bool
+	downloadDirFlag string
+)
 
 var queryCmd = &cobra.Command{
 	Use:   "query",
@@ -21,4 +24,5 @@ Run one of the available subcommands.`,
 func init() {
 	RootCmd.AddCommand(queryCmd)
 	queryCmd.PersistentFlags().BoolVarP(&downloadFlag, "download", "d", false, "Download the selected video instead of watching it")
+	queryCmd.PersistentFlags().StringVarP(&downloadDirFlag, "download-dir", "o", "", "Set download directory")
 }
