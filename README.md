@@ -100,9 +100,9 @@ Ensure that you have the required dependencies installed.
 
    > You can use the following package manager:
    >
-   > | Distribution | Repository  | Instructions                              |
-   > | ------------ | ----------- | ----------------------------------------- |
-   > | _Any_        | [Linuxbrew] | `brew install banh-canh/ytui-tap/formula` |
+   > | Distribution | Repository  | Instructions                       |
+   > | ------------ | ----------- | ---------------------------------- |
+   > | _Any_        | [Linuxbrew] | `brew install banh-canh/ytui/ytui` |
 
    </details>
 
