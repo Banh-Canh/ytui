@@ -89,10 +89,10 @@ Ensure that you have the required dependencies installed.
 
    > You can use the following package manager:
    >
-   > | Distribution | Repository  | Instructions                          |
-   > | ------------ | ----------- | ------------------------------------- |
-   > | _Any_        | [Linuxbrew] | `brew install banh-canh/ytui/formula` |
-   > | Arch Linux   | [AUR]       | `yay -S ytui-bin`                     |
+   > | Distribution | Repository  | Instructions                       |
+   > | ------------ | ----------- | ---------------------------------- |
+   > | _Any_        | [Linuxbrew] | `brew install banh-canh/ytui/ytui` |
+   > | Arch Linux   | [AUR]       | `yay -S ytui-bin`                  |
 
    </details>
    <details>
