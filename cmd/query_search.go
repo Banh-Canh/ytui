@@ -66,46 +66,55 @@ Press enter to run any of the videos.`,
 			os.Exit(0)
 		}
 
-		utils.Logger.Info("Videos found.", zap.Int("video_count", len(*result)))
-		fmt.Printf("Found %d videos for query: %s\n", len(*result), query)
+		for {
+			utils.Logger.Info("Videos found.", zap.Int("video_count", len(*result)))
+			fmt.Printf("Found %d videos for query: %s\n", len(*result), query)
 
-		// Display search results in FZF menu
-		selectedVideo, err := youtube.YoutubeResultMenu(*result, viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"))
-		if err != nil {
-			utils.Logger.Info("FZF menu closed.")
-			fmt.Println("Search cancelled.")
-			os.Exit(0)
-		}
-
-		// Build the video URL
-		videoURL := "https://www.youtube.com/watch?v=" + selectedVideo.VideoID
-		fmt.Printf("Selected video: %s\n", selectedVideo.VideoID)
-
-		// Handle video playback or download
-		if downloadFlag {
-			var downloadDirStr string
-			if downloadDirFlag != "" {
-				downloadDirStr = downloadDirFlag // Use the flag if set
-			} else {
-				downloadDirStr = viper.GetString("download_dir") // Use config value if flag is not set
+			// Display search results in FZF menu
+			selectedVideo, err := youtube.YoutubeResultMenu(
+				*result,
+				viper.GetString("invidious.instance"),
+				viper.GetString("invidious.proxy"),
+			)
+			if err != nil {
+				utils.Logger.Info("FZF menu closed.")
+				fmt.Println("Search cancelled.")
+				os.Exit(0)
 			}
-			utils.Logger.Info("Downloading selected video with yt-dlp.", zap.String("video_url", videoURL))
-			downloadDir := downloadDirStr
-			fmt.Println("Downloading selected video...")
-			download.RunYTDLP(videoURL, downloadDir)
-			fmt.Println("Download completed.")
-		} else {
-			utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
-			fmt.Println("Playing selected video in MPV...")
 
-			player.RunMPV(videoURL)
+			// Build the video URL
+			videoURL := "https://www.youtube.com/watch?v=" + selectedVideo.VideoID
+			fmt.Printf("Selected video: %s\n", selectedVideo.VideoID)
 
-			// Add to watch history if enabled
-			if viper.GetBool("history.enable") {
-				historyFilePath := filepath.Join(configDir, "watched_history.json")
-				youtube.FeedHistory(selectedVideo, historyFilePath)
-				utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
-				fmt.Println("Video added to watch history.")
+			// Handle video playback or download
+			if downloadFlag {
+				var downloadDirStr string
+				if downloadDirFlag != "" {
+					downloadDirStr = downloadDirFlag // Use the flag if set
+				} else {
+					downloadDirStr = viper.GetString("download_dir") // Use config value if flag is not set
+				}
+				utils.Logger.Info("Downloading selected video with yt-dlp.", zap.String("video_url", videoURL))
+				downloadDir := downloadDirStr
+				fmt.Println("Downloading selected video...")
+				download.RunYTDLP(videoURL, downloadDir)
+				fmt.Println("Download completed.")
+			} else {
+				utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
+				fmt.Println("Playing selected video in MPV...")
+
+				player.RunMPV(videoURL)
+
+				// Add to watch history if enabled
+				if viper.GetBool("history.enable") {
+					historyFilePath := filepath.Join(configDir, "watched_history.json")
+					youtube.FeedHistory(selectedVideo, historyFilePath)
+					utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
+					fmt.Println("Video added to watch history.")
+				}
+			}
+			if !keepOpenFlag {
+				break
 			}
 		}
 	},

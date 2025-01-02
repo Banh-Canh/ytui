@@ -9,6 +9,7 @@ import (
 
 var (
 	downloadFlag    bool
+	keepOpenFlag    bool
 	downloadDirFlag string
 )
 
@@ -24,5 +25,6 @@ Run one of the available subcommands.`,
 func init() {
 	RootCmd.AddCommand(queryCmd)
 	queryCmd.PersistentFlags().BoolVarP(&downloadFlag, "download", "d", false, "Download the selected video instead of watching it")
+	queryCmd.PersistentFlags().BoolVarP(&keepOpenFlag, "keep-open", "", false, "Reopen the menu after selecting the player")
 	queryCmd.PersistentFlags().StringVarP(&downloadDirFlag, "download-dir", "o", "", "Set download directory")
 }
