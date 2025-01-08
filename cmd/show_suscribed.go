@@ -10,9 +10,9 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
-	"github.com/Banh-Canh/ytui/pkg/config"
-	"github.com/Banh-Canh/ytui/pkg/utils"
-	"github.com/Banh-Canh/ytui/pkg/youtube"
+	"github.com/Banh-Canh/ytui/internal/config"
+	"github.com/Banh-Canh/ytui/internal/utils"
+	"github.com/Banh-Canh/ytui/internal/youtube"
 )
 
 const (

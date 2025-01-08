@@ -10,7 +10,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/Banh-Canh/ytui/pkg/utils"
+	"github.com/Banh-Canh/ytui/internal/utils"
 )
 
 const YoutubeSubscriptionsURL = "https://www.googleapis.com/youtube/v3/subscriptions"

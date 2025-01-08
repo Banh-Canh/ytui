@@ -9,7 +9,7 @@ import (
 	"github.com/ktr0731/go-fuzzyfinder"
 	"go.uber.org/zap"
 
-	"github.com/Banh-Canh/ytui/pkg/utils"
+	"github.com/Banh-Canh/ytui/internal/utils"
 )
 
 // Fetches video descriptions in the background and caches them.

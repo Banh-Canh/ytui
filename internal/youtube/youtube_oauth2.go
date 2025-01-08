@@ -13,7 +13,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 
-	"github.com/Banh-Canh/ytui/pkg/utils"
+	"github.com/Banh-Canh/ytui/internal/utils"
 )
 
 // Save the token to a file

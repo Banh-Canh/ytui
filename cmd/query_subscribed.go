@@ -9,11 +9,11 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
-	"github.com/Banh-Canh/ytui/pkg/config"
-	"github.com/Banh-Canh/ytui/pkg/download"
-	"github.com/Banh-Canh/ytui/pkg/player"
-	"github.com/Banh-Canh/ytui/pkg/utils"
-	"github.com/Banh-Canh/ytui/pkg/youtube"
+	"github.com/Banh-Canh/ytui/internal/config"
+	"github.com/Banh-Canh/ytui/internal/download"
+	"github.com/Banh-Canh/ytui/internal/player"
+	"github.com/Banh-Canh/ytui/internal/utils"
+	"github.com/Banh-Canh/ytui/internal/youtube"
 )
 
 // subscribedCmd represents the subscribed command

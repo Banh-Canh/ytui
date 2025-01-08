@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
-	"github.com/Banh-Canh/ytui/pkg/utils"
+	"github.com/Banh-Canh/ytui/internal/utils"
 )
 
 type Config struct {

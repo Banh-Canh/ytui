@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/net/proxy"
 
-	"github.com/Banh-Canh/ytui/pkg/utils"
+	"github.com/Banh-Canh/ytui/internal/utils"
 )
 
 type YouTubeAPI struct {
