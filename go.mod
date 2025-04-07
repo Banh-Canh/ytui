@@ -1,6 +1,8 @@
 module github.com/Banh-Canh/ytui
 
 go 1.22.6
+toolchain go1.24.1
+
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/ktr0731/go-fuzzyfinder v0.8.0
@@ -9,7 +11,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/net v0.35.0
-	golang.org/x/oauth2 v0.25.0
+	golang.org/x/oauth2 v0.29.0
 )
 
 require (
