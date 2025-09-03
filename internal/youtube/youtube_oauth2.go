@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
@@ -69,15 +68,48 @@ func loadToken(filename string) (*oauth2.Token, error) {
 	return token, nil
 }
 
-// isTokenExpired checks if the token is expired.
+// isTokenExpired checks if the token is expired and can't be refreshed.
 func isTokenExpired(token *oauth2.Token) bool {
 	utils.Logger.Debug("Checking if token is expired.")
-	if token == nil || !token.Valid() || time.Now().After(token.Expiry) {
-		utils.Logger.Info("Token is expired or invalid.")
+	if token == nil {
+		utils.Logger.Info("Token is nil.")
 		return true
 	}
-	utils.Logger.Debug("Token is valid.")
-	return false
+	
+	// If token is valid or has a refresh token, it's not expired from our perspective
+	if token.Valid() {
+		utils.Logger.Debug("Token is valid.")
+		return false
+	}
+	
+	// If token is invalid but has a refresh token, we can still use it
+	if token.RefreshToken != "" {
+		utils.Logger.Debug("Token is expired but has refresh token.")
+		return false
+	}
+	
+	utils.Logger.Info("Token is expired and has no refresh token.")
+	return true
+}
+
+// refreshToken attempts to refresh an expired token using the refresh token.
+func refreshToken(config *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
+	utils.Logger.Info("Attempting to refresh token.")
+	
+	if token.RefreshToken == "" {
+		utils.Logger.Error("No refresh token available.")
+		return nil, &oauth2.RetrieveError{ErrorCode: "no_refresh_token", ErrorDescription: "No refresh token available"}
+	}
+	
+	tokenSource := config.TokenSource(context.Background(), token)
+	newToken, err := tokenSource.Token()
+	if err != nil {
+		utils.Logger.Error("Failed to refresh token.", zap.Error(err))
+		return nil, err
+	}
+	
+	utils.Logger.Info("Token refreshed successfully.")
+	return newToken, nil
 }
 
 // NewYouTubeAPI initializes the YouTube API by handling the OAuth2 flow.
@@ -107,7 +139,7 @@ func NewYouTubeAPI(clientID, clientSecret string) (chan *YouTubeAPI, error) {
 			if err != nil {
 				utils.Logger.Error("Failed to load token.", zap.String("token_file", tokenFile), zap.Error(err))
 			} else {
-				utils.Logger.Info("Token is expired. Starting OAuth2 flow.")
+				utils.Logger.Info("Token is expired and cannot be refreshed. Starting OAuth2 flow.")
 			}
 			utils.Logger.Debug("Starting OAuth2 flow.")
 			if startOAuthErr = startOAuthFlow(config, apiChan, tokenFile); startOAuthErr != nil {
@@ -115,7 +147,29 @@ func NewYouTubeAPI(clientID, clientSecret string) (chan *YouTubeAPI, error) {
 				return
 			}
 		} else {
-			utils.Logger.Debug("Token loaded successfully.")
+			// Check if token needs refreshing
+			if !token.Valid() && token.RefreshToken != "" {
+				utils.Logger.Info("Token expired but refresh token available. Attempting refresh.")
+				refreshedToken, refreshErr := refreshToken(config, token)
+				if refreshErr != nil {
+					utils.Logger.Error("Failed to refresh token. Starting OAuth2 flow.", zap.Error(refreshErr))
+					if startOAuthErr = startOAuthFlow(config, apiChan, tokenFile); startOAuthErr != nil {
+						utils.Logger.Error("OAuth2 flow failed.", zap.Error(startOAuthErr))
+						return
+					}
+					return
+				}
+				
+				// Save the refreshed token
+				if saveErr := saveToken(tokenFile, refreshedToken); saveErr != nil {
+					utils.Logger.Error("Failed to save refreshed token.", zap.Error(saveErr))
+				} else {
+					utils.Logger.Info("Refreshed token saved successfully.")
+				}
+				token = refreshedToken
+			}
+			
+			utils.Logger.Debug("Token ready for use.")
 			client := config.Client(context.Background(), token)
 			utils.Logger.Info("YouTube API client created.")
 			apiChan <- &YouTubeAPI{Client: client}
@@ -137,7 +191,7 @@ func getTokenFilePath() string {
 }
 
 func startOAuthFlow(config *oauth2.Config, apiChan chan *YouTubeAPI, tokenFile string) error {
-	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline, oauth2.ApprovalForce)
 	utils.Logger.Debug("Opening browser to initiate OAuth2 login.", zap.String("auth_url", authURL))
 
 	err := exec.Command("xdg-open", authURL).Start()
