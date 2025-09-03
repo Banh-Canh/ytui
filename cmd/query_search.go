@@ -11,9 +11,11 @@ import (
 
 	"github.com/Banh-Canh/ytui/internal/config"
 	"github.com/Banh-Canh/ytui/internal/download"
+	"github.com/Banh-Canh/ytui/internal/history"
 	"github.com/Banh-Canh/ytui/internal/player"
+	"github.com/Banh-Canh/ytui/internal/ui"
 	"github.com/Banh-Canh/ytui/internal/utils"
-	"github.com/Banh-Canh/ytui/internal/youtube"
+	"github.com/Banh-Canh/ytui/pkg/youtube"
 )
 
 // searchCmd represents the search command
@@ -52,30 +54,33 @@ Press enter to run any of the videos.`,
 		}
 		utils.Logger.Debug("Config file read successfully.", zap.String("config_file", configPath))
 
+		// Initialize YouTube client
+		config := youtube.Config{
+			InvidiousURL: viper.GetString("invidious.instance"),
+			ProxyURL:     viper.GetString("invidious.proxy"),
+		}
+		yt := youtube.New(config)
+
 		// Search for videos
-		result, err := youtube.SearchVideos(query, viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"), false)
+		result, err := yt.SearchVideos(query, 5)
 		if err != nil {
 			utils.Logger.Fatal("Error searching for videos.", zap.Error(err))
 			fmt.Println("Error: Failed to search for videos.")
 			os.Exit(1)
 		}
 
-		if len(*result) == 0 {
+		if len(result) == 0 {
 			utils.Logger.Info("No videos found for the query.", zap.String("query", query))
 			fmt.Printf("No videos found for query: %s\n", query)
 			os.Exit(0)
 		}
 
 		for {
-			utils.Logger.Info("Videos found.", zap.Int("video_count", len(*result)))
-			fmt.Printf("Found %d videos for query: %s\n", len(*result), query)
+			utils.Logger.Info("Videos found.", zap.Int("video_count", len(result)))
+			fmt.Printf("Found %d videos for query: %s\n", len(result), query)
 
 			// Display search results in FZF menu
-			selectedVideo, err := youtube.YoutubeResultMenu(
-				*result,
-				viper.GetString("invidious.instance"),
-				viper.GetString("invidious.proxy"),
-			)
+			selectedVideo, err := ui.VideoSelectionMenu(result, viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"))
 			if err != nil {
 				utils.Logger.Info("FZF menu closed.")
 				fmt.Println("Search cancelled.")
@@ -108,9 +113,13 @@ Press enter to run any of the videos.`,
 				// Add to watch history if enabled
 				if viper.GetBool("history.enable") {
 					historyFilePath := filepath.Join(configDir, "watched_history.json")
-					youtube.FeedHistory(selectedVideo, historyFilePath)
-					utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
-					fmt.Println("Video added to watch history.")
+					err := history.Add(selectedVideo, historyFilePath)
+					if err != nil {
+						utils.Logger.Error("Failed to add video to history.", zap.Error(err))
+					} else {
+						utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
+						fmt.Println("Video added to watch history.")
+					}
 				}
 			}
 			if !keepOpenFlag {

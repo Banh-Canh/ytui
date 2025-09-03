@@ -3,6 +3,7 @@ module github.com/Banh-Canh/ytui
 go 1.23.0
 
 require (
+	github.com/Banh-Canh/ytui/pkg/youtube v0.0.0-00010101000000-000000000000
 	github.com/adrg/xdg v0.5.3
 	github.com/ktr0731/go-fuzzyfinder v0.8.0
 	github.com/spf13/cobra v1.9.1
@@ -12,6 +13,8 @@ require (
 	golang.org/x/net v0.43.0
 	golang.org/x/oauth2 v0.25.0
 )
+
+replace github.com/Banh-Canh/ytui/pkg/youtube => ./pkg/youtube
 
 require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect

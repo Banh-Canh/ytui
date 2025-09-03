@@ -11,9 +11,11 @@ import (
 
 	"github.com/Banh-Canh/ytui/internal/config"
 	"github.com/Banh-Canh/ytui/internal/download"
+	"github.com/Banh-Canh/ytui/internal/history"
 	"github.com/Banh-Canh/ytui/internal/player"
+	"github.com/Banh-Canh/ytui/internal/ui"
 	"github.com/Banh-Canh/ytui/internal/utils"
-	"github.com/Banh-Canh/ytui/internal/youtube"
+	"github.com/Banh-Canh/ytui/pkg/youtube"
 )
 
 // subscribedCmd represents the subscribed command
@@ -30,7 +32,7 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 		utils.Logger.Info("Command 'subscribed' executed.")
 		fmt.Println("Executing 'subscribed' command...") // Print a simple status message.
 
-		var result *[]youtube.SearchResultItem
+		var result []youtube.SearchResultItem
 		var err error
 
 		// Read the config file
@@ -57,17 +59,27 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 			utils.Logger.Info("Local configuration is false. Starting YouTube API authentication.")
 			fmt.Println("Authenticating with YouTube API...")
 
-			apiChan, err := youtube.NewYouTubeAPI(clientID, secretID)
+			// Initialize YouTube client with OAuth2
+			config := youtube.Config{
+				InvidiousURL: viper.GetString("invidious.instance"),
+				ProxyURL:     viper.GetString("invidious.proxy"),
+				ClientID:     clientID,
+				ClientSecret: secretID,
+				RedirectURL:  "http://localhost:8080/oauth2callback",
+			}
+			yt := youtube.New(config)
+			
+			// Authenticate
+			err = yt.Authenticate()
 			if err != nil {
 				utils.Logger.Fatal("Failed to authenticate to YouTube API.", zap.Error(err))
 				fmt.Println("Error: Failed to authenticate with YouTube API.")
 				os.Exit(1)
 			}
-			yt := <-apiChan
 			utils.Logger.Info("YouTube API authenticated successfully.")
 			fmt.Println("YouTube API authenticated successfully.")
 
-			result, err = yt.GetAllSubscribedChannelsVideos(viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"))
+			result, err = yt.GetSubscriptionVideos()
 			if err != nil {
 				utils.Logger.Fatal("Failed to get all subscribed channels videos.", zap.Error(err))
 				fmt.Println("Error: Failed to retrieve subscribed channels videos.")
@@ -77,7 +89,14 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 			utils.Logger.Info("Using local configuration for subscribed channels.")
 			fmt.Println("Retrieving subscribed channels from local configuration...")
 
-			result, err = youtube.GetLocalSubscribedChannelsVideos(viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"), viper.GetStringSlice("channels.subscribed"))
+			// Initialize YouTube client for local subscriptions
+			config := youtube.Config{
+				InvidiousURL: viper.GetString("invidious.instance"),
+				ProxyURL:     viper.GetString("invidious.proxy"),
+			}
+			yt := youtube.New(config)
+			
+			result, err = yt.Subscriptions().GetVideosFromChannels(viper.GetStringSlice("channels.subscribed"))
 			if err != nil {
 				utils.Logger.Fatal("Failed to get local subscribed channels videos.", zap.Error(err))
 				fmt.Println("Error: Failed to retrieve local subscribed channels videos.")
@@ -85,14 +104,10 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 			}
 		}
 		for {
-			utils.Logger.Info("Retrieved videos from subscribed channels.", zap.Int("video_count", len(*result)))
-			fmt.Printf("Found %d videos from subscribed channels.\n", len(*result))
+			utils.Logger.Info("Retrieved videos from subscribed channels.", zap.Int("video_count", len(result)))
+			fmt.Printf("Found %d videos from subscribed channels.\n", len(result))
 
-			selectedVideo, err := youtube.YoutubeResultMenu(
-				*result,
-				viper.GetString("invidious.instance"),
-				viper.GetString("invidious.proxy"),
-			)
+			selectedVideo, err := ui.VideoSelectionMenu(result, viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"))
 			if err != nil {
 				utils.Logger.Info("FZF menu closed.")
 				fmt.Println("Video selection cancelled.")
@@ -122,9 +137,13 @@ It will also only pick from the 50 most relevants subscribed channels in your Yo
 
 				if viper.GetBool("history.enable") {
 					historyFilePath := filepath.Join(configDir, "watched_history.json")
-					youtube.FeedHistory(selectedVideo, historyFilePath)
-					utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
-					fmt.Println("Video added to watch history.")
+					err := history.Add(selectedVideo, historyFilePath)
+					if err != nil {
+						utils.Logger.Error("Failed to add video to history.", zap.Error(err))
+					} else {
+						utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
+						fmt.Println("Video added to watch history.")
+					}
 				}
 
 			}

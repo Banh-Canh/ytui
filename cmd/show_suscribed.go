@@ -12,7 +12,7 @@ import (
 
 	"github.com/Banh-Canh/ytui/internal/config"
 	"github.com/Banh-Canh/ytui/internal/utils"
-	"github.com/Banh-Canh/ytui/internal/youtube"
+	"github.com/Banh-Canh/ytui/pkg/youtube"
 )
 
 const (
@@ -64,18 +64,27 @@ It will also only pick from the 50 most relevant subscribed channels in your You
 			utils.Logger.Info("Using YouTube API to fetch subscribed channels.")
 			fmt.Println("Authenticating with YouTube API...")
 
+			// Initialize YouTube client with OAuth2
+			config := youtube.Config{
+				InvidiousURL: viper.GetString("invidious.instance"),
+				ProxyURL:     viper.GetString("invidious.proxy"),
+				ClientID:     clientID,
+				ClientSecret: secretID,
+				RedirectURL:  "http://localhost:8080/oauth2callback",
+			}
+			yt := youtube.New(config)
+			
 			// Authenticate with YouTube API
-			apiChan, err := youtube.NewYouTubeAPI(clientID, secretID)
+			err = yt.Authenticate()
 			if err != nil {
 				utils.Logger.Error("Failed to authenticate to YouTube API.", zap.Error(err))
 				fmt.Println("Error: Authentication with YouTube API failed.")
 				os.Exit(1)
 			}
-			yt := <-apiChan
 			utils.Logger.Info("YouTube API authenticated successfully.")
 
 			// Get the list of subscribed channels
-			channelList, err = yt.GetSubscribedChannels(YoutubeSubscriptionsURL)
+			channelList, err = yt.GetSubscribedChannels()
 			if err != nil {
 				utils.Logger.Error("Failed to retrieve channels list.", zap.Error(err))
 				fmt.Println("Error: Unable to retrieve subscribed channels.")
@@ -90,7 +99,13 @@ It will also only pick from the 50 most relevant subscribed channels in your You
 
 		// Get detailed information on channels
 		fmt.Println("Fetching subscribed channels information...")
-		channels, err := youtube.GetAllChannelsInfo(channelList, viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"))
+		// Initialize YouTube client for channel info
+		infoConfig := youtube.Config{
+			InvidiousURL: viper.GetString("invidious.instance"),
+			ProxyURL:     viper.GetString("invidious.proxy"),
+		}
+		infoYt := youtube.New(infoConfig)
+		channels, err := infoYt.Search().MultipleChannelsInfo(channelList)
 		if err != nil {
 			utils.Logger.Error("Failed to get channels data.", zap.Error(err))
 			fmt.Println("Error: Unable to retrieve channel information.")
@@ -102,7 +117,7 @@ It will also only pick from the 50 most relevant subscribed channels in your You
 		for _, channel := range channels {
 			fmt.Printf("\n")
 			fmt.Printf("Author: %s\n", channel.Author)
-			fmt.Printf("Author URL: %s\n", channel.AuthorUrl)
+			fmt.Printf("Author URL: %s\n", channel.AuthorURL)
 			fmt.Println(strings.Repeat("-", 30))
 		}
 		fmt.Println("Successfully retrieved and displayed your subscribed channels.")

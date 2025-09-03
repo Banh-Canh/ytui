@@ -11,9 +11,10 @@ import (
 
 	"github.com/Banh-Canh/ytui/internal/config"
 	"github.com/Banh-Canh/ytui/internal/download"
+	"github.com/Banh-Canh/ytui/internal/history"
 	"github.com/Banh-Canh/ytui/internal/player"
+	"github.com/Banh-Canh/ytui/internal/ui"
 	"github.com/Banh-Canh/ytui/internal/utils"
-	"github.com/Banh-Canh/ytui/internal/youtube"
 )
 
 // historyCmd represents the history command
@@ -42,7 +43,7 @@ will be stored in there.`,
 		utils.Logger.Debug("Reading watched history from file.", zap.String("history_file", historyFile))
 
 		// Fetch the watched videos from the history file
-		result, err := youtube.GetWatchedVideos(historyFile)
+		result, err := history.Load(historyFile)
 		if err != nil {
 			utils.Logger.Error("Failed to read history from file.", zap.Error(err))
 			fmt.Println("Error: Unable to read video history.")
@@ -61,11 +62,7 @@ will be stored in there.`,
 			fmt.Printf("Found %d videos in your history.\n", len(result))
 
 			// Show the FZF menu to select a video
-			selectedVideo, err := youtube.YoutubeResultMenu(
-				result,
-				viper.GetString("invidious.instance"),
-				viper.GetString("invidious.proxy"),
-			)
+			selectedVideo, err := ui.VideoSelectionMenu(result, viper.GetString("invidious.instance"), viper.GetString("invidious.proxy"))
 			if err != nil {
 				utils.Logger.Info("FZF menu closed.")
 				fmt.Println("History search cancelled.")
@@ -98,9 +95,13 @@ will be stored in there.`,
 				// Add to watch history if history is enabled
 				if viper.GetBool("history.enable") {
 					historyFilePath := filepath.Join(configDir, "watched_history.json")
-					youtube.FeedHistory(selectedVideo, historyFilePath)
-					utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
-					fmt.Println("Video added to watch history.")
+					err := history.Add(selectedVideo, historyFilePath)
+					if err != nil {
+						utils.Logger.Error("Failed to add video to history.", zap.Error(err))
+					} else {
+						utils.Logger.Info("Video added to watch history.", zap.String("video_id", selectedVideo.VideoID))
+						fmt.Println("Video added to watch history.")
+					}
 				}
 			}
 			if !keepOpenFlag {
