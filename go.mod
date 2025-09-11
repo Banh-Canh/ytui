@@ -7,13 +7,16 @@ toolchain go1.24.4
 require (
 	github.com/Banh-Canh/ytui/pkg/youtube v0.0.0-00010101000000-000000000000
 	github.com/adrg/xdg v0.5.3
+	github.com/blacktop/go-termimg v0.1.20
+	github.com/charmbracelet/bubbletea v1.3.8
+	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/ktr0731/go-fuzzyfinder v0.8.0
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/net v0.43.0
-	golang.org/x/oauth2 v0.25.0
+	golang.org/x/oauth2 v0.31.0
 )
 
 replace github.com/Banh-Canh/ytui/pkg/youtube => ./pkg/youtube
@@ -21,10 +24,7 @@ replace github.com/Banh-Canh/ytui/pkg/youtube => ./pkg/youtube
 require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
-	github.com/blacktop/go-termimg v0.1.20 // indirect
-	github.com/charmbracelet/bubbletea v1.3.8 // indirect
 	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
-	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/x/ansi v0.10.1 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
 	github.com/charmbracelet/x/mosaic v0.0.0-20250702191427-5bdfc8f2e4ff // indirect
