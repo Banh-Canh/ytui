@@ -14,7 +14,7 @@ such as your history, subscribed channels, or by searching YouTube.
 
 <div style="text-align: center;margin-top: 20">
     </br>
-    <img src="public/ytui-demo.gif" width="700vw" />
+    <img src="public/ytui-screenshot.png" width="700vw" />
 </div>
 
 ## Table of Contents
@@ -39,11 +39,11 @@ your YouTube experience directly from the terminal. Some of the key features inc
   or retrieve videos from your history or subscribed channels,
   and play them directly in your local terminal video player.
 
-- **FZF Integration**: `ytui` features something similar the popular fuzzy finder
-  `fzf` (powered by <https://github.com/ktr0731/go-fuzzyfinder>) to allow fast
-  and efficient video search results navigation.
+- **Fuzzy Finder Integration**: Built-in fuzzy finder interface
+  (powered by [go-fuzzyfinder](https://github.com/ktr0731/go-fuzzyfinder)) for fast
+  and efficient navigation through video search results.
   This makes it easy to browse through large lists of videos
-  and pick the one you want to play.
+  and quickly select the one you want to play.
 
 - **Video History Management**: Keep track of the videos you've watched using `ytui`.
   The tool logs your watch history in the `watched_history.json`
@@ -56,8 +56,8 @@ your YouTube experience directly from the terminal. Some of the key features inc
   using OAuth to access your personal subscriptions.
   The tool leverages the YouTube Data API to fetch data related to your account.
 
-- **Terminal-Based User-interface**: Allowing you to search for videos
-  directly from the terminal environment.
+- **Terminal-Based Interface**: Clean, intuitive terminal UI that integrates
+  seamlessly with your command-line workflow.
 
 - **Customization**: Adjust settings through a configuration file
   located in `$HOME/.config/ytui/config.yaml` to tailor the tool
@@ -69,7 +69,11 @@ and viewing for command-line users.
 
 ## Requirements
 
-You must have `mpv` and `yt-dlp` installed.
+- **Go 1.24.0+** (for building from source)
+- **mpv** - Media player for video playback
+- **yt-dlp** - YouTube video downloader
+
+You must have `mpv` and `yt-dlp` installed on your system.
 
 ## Installation
 
@@ -91,8 +95,16 @@ Ensure that you have the required dependencies installed.
    >
    > | Distribution | Repository  | Instructions                       |
    > | ------------ | ----------- | ---------------------------------- |
-   > | _Any_        | [Linuxbrew] | `brew install banh-canh/ytui/ytui` |
+   > | _Any_        | [Homebrew]  | `brew install banh-canh/ytui/ytui` |
    > | Arch Linux   | [AUR]       | `yay -S ytui-bin`                  |
+   >
+   > **From source:**
+   > ```bash
+   > git clone https://github.com/Banh-Canh/ytui.git
+   > cd ytui
+   > go build -o ytui ./main.go
+   > sudo mv ytui /usr/local/bin/
+   > ```
 
    </details>
    <details>
@@ -102,13 +114,49 @@ Ensure that you have the required dependencies installed.
    >
    > | Distribution | Repository  | Instructions                       |
    > | ------------ | ----------- | ---------------------------------- |
-   > | _Any_        | [Linuxbrew] | `brew install banh-canh/ytui/ytui` |
+   > | _Any_        | [Homebrew]  | `brew install banh-canh/ytui/ytui` |
+   >
+   > **From source:**
+   > ```bash
+   > git clone https://github.com/Banh-Canh/ytui.git
+   > cd ytui
+   > go build -o ytui ./main.go
+   > mv ytui /usr/local/bin/
+   > ```
 
    </details>
 
 ## Usage
 
-See [Documentations](docs/ytui.md).
+For detailed usage instructions and command reference, see the [documentation](docs/ytui.md).
+
+### Quick Start
+
+```bash
+# Start the interactive YouTube browser
+ytui browse
+
+# Or simply run without subcommands (defaults to browse)
+ytui
+
+# Get help
+ytui --help
+ytui browse --help
+```
+
+### Navigation Controls
+
+- `↑↓/jk`: Navigate items
+- `←→/PgUp/PgDn`: Page navigation  
+- `g/G`: Jump to top/bottom
+- `Enter`: Select/play item
+- `h/Backspace`: Go back
+- `t`: Open thumbnail in external viewer
+- `s`: Sort by date (subscriptions/history only)
+- `p/Space`: Play video
+- `d`: Download video
+- `/`: Search
+- `q`: Quit
 
 ## Configuration
 
@@ -158,23 +206,20 @@ youtube:
 
 ## Examples
 
-1. **Search for a Video on YouTube:**
+1. **Start the Interactive Browser:**
 
    ```sh
-   ytui query search "your search query"
+   ytui browse
+   # or simply
+   ytui
    ```
 
-1. **Fetch Videos from Your Subscribed Channels:**
-
-   ```sh
-   ytui query subscribed
-   ```
-
-1. **Retrieve Videos from Your History:**
-
-   ```sh
-   ytui query history
-   ```
+2. **Browse Different Content Types:**
+   - Launch ytui and use the menu to navigate between:
+     - Search for videos using `/` within the TUI
+     - Browse your subscribed channels
+     - View your watch history
+     - Access downloaded videos
 
 ## Troubleshooting
 
@@ -206,7 +251,12 @@ $HOME/.config/ytui/ytui.log
 
 ### Reporting Issues
 
-When reporting issues, please include relevant log entries to help with diagnosing the problem. You can copy the log content and include it in your bug report.
+When reporting issues, please:
+
+1. Include relevant log entries from `$HOME/.config/ytui/ytui.log`
+2. Specify your operating system and ytui version
+3. Provide steps to reproduce the issue
+4. Check [existing issues](https://github.com/Banh-Canh/ytui/issues) before creating a new one
 
 ## License
 
