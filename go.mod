@@ -8,7 +8,7 @@ require (
 	github.com/Banh-Canh/ytui/pkg/youtube v0.0.0-20250911142529-545f0e67b083
 	github.com/adrg/xdg v0.5.3
 	github.com/blacktop/go-termimg v0.1.20
-	github.com/charmbracelet/bubbletea v1.3.8
+	github.com/charmbracelet/bubbletea v1.3.9
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/ktr0731/go-fuzzyfinder v0.9.0
 	github.com/spf13/cobra v1.10.1
