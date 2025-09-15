@@ -1,8 +1,12 @@
 package ui
 
 import (
+	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -18,11 +22,11 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"github.com/blacktop/go-termimg"
+	"github.com/nfnt/resize"
 
 	"github.com/Banh-Canh/ytui/internal/config"
 	"github.com/Banh-Canh/ytui/internal/download"
 	"github.com/Banh-Canh/ytui/internal/history"
-	"github.com/Banh-Canh/ytui/internal/player"
 	"github.com/Banh-Canh/ytui/internal/utils"
 	"github.com/Banh-Canh/ytui/pkg/youtube"
 )
@@ -58,8 +62,12 @@ type model struct {
 	viewport        int
 	viewportOffset  int
 	selectedVideo   *youtube.SearchResultItem
-	thumbnailCache  map[string]string // Cache for rendered thumbnails
 	sortByDate      bool              // Whether to sort by date (newest first)
+	// Video playback status
+	currentPlayingItem  *youtube.SearchResultItem
+	currentPlayPosition float64 // Current position in seconds
+	currentPlayDuration float64 // Total duration in seconds
+	isVideoPlaying      bool
 }
 
 // Messages
@@ -81,43 +89,84 @@ type errMsg struct {
 
 func (e errMsg) Error() string { return e.err.Error() }
 
-type thumbnailLoadedMsg struct {
-	itemID    string
-	cacheKey  string
-	thumbnail string
+
+type playbackProgressMsg struct {
+	position  float64
+	duration  float64
+	isPlaying bool
+	itemName  string
 }
+
+type playbackStoppedMsg struct{}
+
+type stopPlaybackMsg struct{}
+
+type togglePauseMsg struct{}
+
+type cycleSubtitleMsg struct{}
+
+type cycleAudioMsg struct{}
 
 // Styles
 var (
+	// Modern header styles
+	headerStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#E8E3F3")).
+			Background(lipgloss.Color("#1a1b26")).
+			BorderBottom(true).
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("#3b4261")).
+			Padding(0, 2).
+			Margin(0).
+			Bold(true)
+
+	headerTitleStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#f7768e")).
+			Bold(true)
+
+	headerStatusStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#9ece6a"))
+			
+	headerOfflineStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#f7768e")).
+			Bold(true)
+
+	headerDividerStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#3b4261"))
+
+	// Panel title styles (updated for consistency)
 	titleStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFFFFF")).
-		Background(lipgloss.Color("#FF0000")).
-		Padding(0, 1).
-		Bold(true)
+			Foreground(lipgloss.Color("#f7768e")).
+			Background(lipgloss.Color("#1f2335")).
+			Padding(0, 1).
+			Bold(true)
 
 	itemStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FAFAFA"))
+			Foreground(lipgloss.Color("#c0caf5"))
 
 	selectedStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFFFFF")).
-		Background(lipgloss.Color("#FF0000")).
-		Bold(true)
+			Foreground(lipgloss.Color("#1a1b26")).
+			Background(lipgloss.Color("#f7768e")).
+			Bold(true)
 
 	dimStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#888888"))
+			Foreground(lipgloss.Color("#565f89"))
 
 	infoStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FAFAFA"))
+			Foreground(lipgloss.Color("#c0caf5"))
 
 	panelStyle = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#444444")).
-		Padding(1)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#3b4261")).
+			Padding(1)
 )
 
 func Menu() {
 	setupCleanupHandlers()
 	
+	// Clean up old thumbnail cache files
+	go cleanupOldThumbnails()
+
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		CleanupMpvProcesses()
@@ -167,8 +216,11 @@ func initialModel() model {
 		height:         24,
 		viewport:       15,
 		viewportOffset: 0,
-		thumbnailCache: make(map[string]string),
 		sortByDate:     true, // Default to sorting by date (newest first)
+		currentPlayingItem:  nil,
+		currentPlayPosition: 0,
+		currentPlayDuration: 0,
+		isVideoPlaying:      false,
 	}
 }
 
@@ -176,7 +228,9 @@ func (m model) Init() tea.Cmd {
 	if m.err != nil {
 		return nil
 	}
-	return nil
+	return tea.Batch(
+		createProgressUpdateCmd(),
+	)
 }
 
 // sortVideosByDate sorts videos by publication date (newest first if sortByDate is true)
@@ -287,11 +341,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateViewport()
 		m.updateCurrentDetails()
 		
-		// Limit cache size to prevent memory growth
-		if len(m.thumbnailCache) > 20 {
-			// Clear old entries
-			m.thumbnailCache = make(map[string]string)
-		}
 		
 		return m, nil
 
@@ -312,9 +361,50 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateCurrentDetails()
 		return m, nil
 
-	case thumbnailLoadedMsg:
-		// Store thumbnail in cache
-		m.thumbnailCache[msg.cacheKey] = msg.thumbnail
+
+	case playbackProgressMsg:
+		m.currentPlayPosition = msg.position
+		m.currentPlayDuration = msg.duration
+		wasPlaying := m.isVideoPlaying
+		m.isVideoPlaying = msg.isPlaying
+
+		if !msg.isPlaying && wasPlaying {
+			// Video stopped, clear the current playing item
+			m.currentPlayingItem = nil
+			m.currentPlayPosition = 0
+			m.currentPlayDuration = 0
+		}
+		// Continue updating progress only if something is playing or we just detected playback
+		if msg.isPlaying || wasPlaying {
+			return m, createProgressUpdateCmd()
+		}
+		return m, nil
+
+	case playbackStoppedMsg:
+		m.isVideoPlaying = false
+		m.currentPlayingItem = nil
+		m.currentPlayPosition = 0
+		m.currentPlayDuration = 0
+		return m, nil
+
+	case stopPlaybackMsg:
+		m.isVideoPlaying = false
+		m.currentPlayingItem = nil
+		m.currentPlayPosition = 0
+		m.currentPlayDuration = 0
+		return m, nil
+
+	case togglePauseMsg:
+		// The pause state will be updated automatically by the next progress update
+		// No need to change m.isVideoPlaying here as it will be reflected in checkMpvStatus
+		return m, nil
+
+	case cycleSubtitleMsg:
+		// Subtitle track cycling handled, no UI state changes needed
+		return m, nil
+
+	case cycleAudioMsg:
+		// Audio track cycling handled, no UI state changes needed
 		return m, nil
 
 	case errMsg:
@@ -427,8 +517,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "backspace", "h":
 			return m.goBack()
 		case "p", " ":
-			if m.currentDetails != nil && (m.currentView == SearchResultsView || m.currentView == SubscribedView || m.currentView == HistoryView) {
-				return m, playVideo(*m.currentDetails, false)
+			// If video is playing, toggle pause/play; otherwise play video
+			if m.isVideoPlaying {
+				return m, togglePause()
+			} else if m.currentDetails != nil && (m.currentView == SearchResultsView || m.currentView == SubscribedView || m.currentView == HistoryView) {
+				m.currentPlayingItem = m.currentDetails
+				return m, tea.Batch(
+					playVideo(*m.currentDetails, false),
+					createProgressUpdateCmd(),
+				)
 			}
 		case "d":
 			if m.currentDetails != nil && (m.currentView == SearchResultsView || m.currentView == SubscribedView || m.currentView == HistoryView) {
@@ -439,8 +536,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, openThumbnail(*m.currentDetails)
 			}
 		case "s":
-			// Toggle sort by date (only for subscriptions and history, not search results)
-			if m.currentView == SubscribedView || m.currentView == HistoryView {
+			// Stop video playback if playing, otherwise toggle sort
+			if m.isVideoPlaying {
+				return m, stopPlayback()
+			} else if m.currentView == SubscribedView || m.currentView == HistoryView {
+				// Toggle sort by date (only for subscriptions and history, not search results)
 				m.sortByDate = !m.sortByDate
 				// Re-sort current items
 				if len(m.videoItems) > 0 {
@@ -469,12 +569,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) updateCurrentDetails() {
+	previousDetails := m.currentDetails
+	
 	if len(m.items) > 0 && m.cursor < len(m.items) {
 		switch item := m.items[m.cursor].(type) {
 		case youtube.SearchResultItem:
 			m.currentDetails = &item
 		case menuItem:
 			m.currentDetails = nil
+		}
+	}
+	
+	// Clear Kitty image if we changed to a different item or no item
+	if previousDetails != m.currentDetails {
+		if m.currentDetails == nil || 
+		   (previousDetails != nil && previousDetails.VideoID != m.currentDetails.VideoID) {
+			clearKittyImage()
 		}
 	}
 }
@@ -509,13 +619,25 @@ func playVideo(video youtube.SearchResultItem, addToHistory bool) tea.Cmd {
 	return func() tea.Msg {
 		videoURL := "https://www.youtube.com/watch?v=" + video.VideoID
 		utils.Logger.Info("Playing selected video in MPV.", zap.String("video_url", videoURL))
-		
-		cmd := exec.Command("mpv", videoURL)
+
+		// Close any existing ytui-launched videos before starting a new one
+		if len(runningMpvProcesses) > 0 {
+			CleanupMpvProcesses()
+		}
+
+		// Prepare mpv command with JSON IPC enabled for position tracking
+		// Use a unique socket path to identify ytui-launched processes
+		args := []string{"--input-ipc-server=/tmp/ytui-mpvsocket", "--title=ytui-player", videoURL}
+		cmd := exec.Command("mpv", args...)
+
+		// Add to global tracking so we can kill it on exit
 		runningMpvProcesses = append(runningMpvProcesses, cmd)
-		
+
+		// Start playback tracking in background
 		go func() {
-			player.RunMPV(videoURL)
-			
+			// Run mpv and wait for completion
+			cmd.Run()
+
 			// Remove from tracking list when mpv exits
 			for i, p := range runningMpvProcesses {
 				if p == cmd {
@@ -523,7 +645,7 @@ func playVideo(video youtube.SearchResultItem, addToHistory bool) tea.Cmd {
 					break
 				}
 			}
-			
+
 			// Add to history if enabled and requested
 			if addToHistory && viper.GetBool("history.enable") {
 				configDir, err := config.GetConfigDirPath()
@@ -533,8 +655,202 @@ func playVideo(video youtube.SearchResultItem, addToHistory bool) tea.Cmd {
 				}
 			}
 		}()
-		
+
 		return nil
+	}
+}
+
+// getMpvPosition retrieves current playback position from mpv via JSON IPC
+func getMpvPosition() float64 {
+	conn, err := net.Dial("unix", "/tmp/ytui-mpvsocket")
+	if err != nil {
+		return 0
+	}
+	defer conn.Close()
+
+	// Send command to get playback position
+	command := map[string]interface{}{
+		"command": []string{"get_property", "time-pos"},
+	}
+
+	jsonData, err := json.Marshal(command)
+	if err != nil {
+		return 0
+	}
+
+	conn.Write(append(jsonData, '\n'))
+
+	// Read response
+	buffer := make([]byte, 1024)
+	n, err := conn.Read(buffer)
+	if err != nil {
+		return 0
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(buffer[:n], &response); err != nil {
+		return 0
+	}
+
+	if data, ok := response["data"].(float64); ok {
+		return data
+	}
+
+	return 0
+}
+
+// getMpvDuration retrieves total duration from mpv via JSON IPC
+func getMpvDuration() float64 {
+	conn, err := net.Dial("unix", "/tmp/ytui-mpvsocket")
+	if err != nil {
+		return 0
+	}
+	defer conn.Close()
+
+	// Send command to get duration
+	command := map[string]interface{}{
+		"command": []string{"get_property", "duration"},
+	}
+
+	jsonData, err := json.Marshal(command)
+	if err != nil {
+		return 0
+	}
+
+	conn.Write(append(jsonData, '\n'))
+
+	// Read response
+	buffer := make([]byte, 1024)
+	n, err := conn.Read(buffer)
+	if err != nil {
+		return 0
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(buffer[:n], &response); err != nil {
+		return 0
+	}
+
+	if data, ok := response["data"].(float64); ok {
+		return data
+	}
+
+	return 0
+}
+
+// stopMpv sends a quit command to mpv via JSON IPC
+func stopMpv() error {
+	conn, err := net.Dial("unix", "/tmp/ytui-mpvsocket")
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Send quit command
+	command := map[string]interface{}{
+		"command": []string{"quit"},
+	}
+
+	jsonData, err := json.Marshal(command)
+	if err != nil {
+		return err
+	}
+
+	conn.Write(append(jsonData, '\n'))
+	return nil
+}
+
+// togglePauseMpv toggles pause/play state in mpv via JSON IPC
+func togglePauseMpv() error {
+	conn, err := net.Dial("unix", "/tmp/ytui-mpvsocket")
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Send pause toggle command
+	command := map[string]interface{}{
+		"command": []string{"cycle", "pause"},
+	}
+
+	jsonData, err := json.Marshal(command)
+	if err != nil {
+		return err
+	}
+
+	conn.Write(append(jsonData, '\n'))
+	return nil
+}
+
+// checkMpvStatus checks if mpv is running and returns current status
+func checkMpvStatus() (position, duration float64, isPlaying bool) {
+	conn, err := net.Dial("unix", "/tmp/ytui-mpvsocket")
+	if err != nil {
+		return 0, 0, false
+	}
+	defer conn.Close()
+
+	// First check if mpv is paused
+	pauseCommand := map[string]interface{}{
+		"command": []string{"get_property", "pause"},
+	}
+
+	jsonData, err := json.Marshal(pauseCommand)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	conn.Write(append(jsonData, '\n'))
+
+	buffer := make([]byte, 1024)
+	n, err := conn.Read(buffer)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	var pauseResponse map[string]interface{}
+	if err := json.Unmarshal(buffer[:n], &pauseResponse); err != nil {
+		return 0, 0, false
+	}
+
+	isPaused, _ := pauseResponse["data"].(bool)
+	position = getMpvPosition()
+	duration = getMpvDuration()
+
+	return position, duration, !isPaused && position >= 0
+}
+
+// createProgressUpdateCmd creates a command that periodically updates playback progress
+func createProgressUpdateCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		position, duration, isPlaying := checkMpvStatus()
+		return playbackProgressMsg{
+			position:  position,
+			duration:  duration,
+			isPlaying: isPlaying,
+		}
+	})
+}
+
+// stopPlayback stops the currently playing video
+func stopPlayback() tea.Cmd {
+	return func() tea.Msg {
+		err := stopMpv()
+		if err != nil {
+			return errMsg{fmt.Errorf("failed to stop playback: %w", err)}
+		}
+		return stopPlaybackMsg{}
+	}
+}
+
+// togglePause toggles pause/play state of the currently playing video
+func togglePause() tea.Cmd {
+	return func() tea.Msg {
+		err := togglePauseMpv()
+		if err != nil {
+			return errMsg{fmt.Errorf("failed to toggle pause: %w", err)}
+		}
+		return togglePauseMsg{}
 	}
 }
 
@@ -552,6 +868,39 @@ func downloadVideo(video youtube.SearchResultItem) tea.Cmd {
 
 // Global variable to track running mpv processes
 var runningMpvProcesses []*exec.Cmd
+
+// Global variable to track current image for cleanup
+var globalImageArea *imageArea
+
+// Global variable to track current Kitty image for cleanup
+var globalKittyImageArea *imageArea
+
+// Shared HTTP client for image downloads to improve performance
+var imageDownloadClient *http.Client
+
+type imageArea struct {
+	x      int
+	y      int
+	width  int
+	height int
+	itemID string
+}
+
+func init() {
+	// Initialize shared HTTP client with optimized settings
+	transport := &http.Transport{
+		MaxIdleConns:          20,
+		MaxIdleConnsPerHost:   5,
+		IdleConnTimeout:       60 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		DisableKeepAlives:     false,
+	}
+	imageDownloadClient = &http.Client{
+		Timeout:   8 * time.Second,
+		Transport: transport,
+	}
+}
 
 func (m model) goBack() (model, tea.Cmd) {
 	switch m.currentView {
@@ -609,33 +958,37 @@ func (m model) View() string {
 		return "Loading..."
 	}
 
-	// Calculate exact dimensions
-	leftWidth := (m.width / 2) - 2
-	rightWidth := m.width - leftWidth - 2
-	contentHeight := m.height - 2
-
-	// Ensure viewport is calculated correctly for display
-	viewport := m.height - 8 
+	// Use cached viewport calculations for better performance
+	viewport := m.viewport
 	if viewport < 5 {
 		viewport = 5
 	}
-	
-	// Create panels using current model state
-	leftPane := m.renderItemList(leftWidth, contentHeight, viewport, m.viewportOffset)
+	viewportOffset := m.viewportOffset
+
+	// Render modern header
+	header := m.renderHeader()
+
+	// Calculate exact dimensions to fit in terminal (account for header)
+	leftWidth := (m.width / 2) - 2
+	rightWidth := m.width - leftWidth - 2
+	contentHeight := m.height - 4 // Leave space for header, help, and spacing
+
+	// Create panels with exact sizing
+	leftPane := m.renderItemList(leftWidth, contentHeight, viewport, viewportOffset)
 	rightPane := m.renderDetails(rightWidth, contentHeight)
 
-	// Style panels
+	// Style panels with modern theme
 	leftStyle := lipgloss.NewStyle().
 		Width(leftWidth).
 		Height(contentHeight).
 		Border(lipgloss.RoundedBorder(), false, true, false, false).
-		BorderForeground(lipgloss.Color("#333"))
-	
+		BorderForeground(lipgloss.Color("#3b4261"))
+
 	rightStyle := lipgloss.NewStyle().
 		Width(rightWidth).
 		Height(contentHeight).
 		Border(lipgloss.RoundedBorder(), false, false, false, true).
-		BorderForeground(lipgloss.Color("#333"))
+		BorderForeground(lipgloss.Color("#3b4261"))
 
 	leftPanel := leftStyle.Render(leftPane)
 	rightPanel := rightStyle.Render(rightPane)
@@ -645,7 +998,11 @@ func (m model) View() string {
 
 	// Join horizontally and add help at bottom
 	content := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
-	finalContent := lipgloss.JoinVertical(lipgloss.Left, content, help)
+	finalContent := lipgloss.JoinVertical(lipgloss.Left, header, content, help)
+	
+	// Render Kitty image overlay after lipgloss content (separate layer)
+	// Note: This is done in the background to not interfere with lipgloss rendering
+	m.renderKittyImageOverlay(leftWidth, rightWidth, contentHeight)
 	
 	return finalContent
 }
@@ -771,70 +1128,6 @@ func (m model) renderDetails(width, height int) string {
 		return details.String()
 	}
 
-	// Render thumbnail if available and there's space (need at least 12 lines total)
-	if maxLines > 12 {
-		// For YouTube videos, construct thumbnail URL
-		imageURL := fmt.Sprintf("https://img.youtube.com/vi/%s/maxresdefault.jpg", m.currentDetails.VideoID)
-		if imageURL != "" {
-			// Calculate dimensions - make it slightly bigger
-			thumbWidth := width - 2
-			if thumbWidth > 50 {
-				thumbWidth = 50
-			}
-			if thumbWidth < 30 {
-				thumbWidth = 30
-			}
-			// Use more space for height - about 45% of available space
-			thumbHeight := (maxLines * 9) / 20 
-			if thumbHeight > 18 {
-				thumbHeight = 18 // Cap at 18 lines
-			}
-			if thumbHeight < 10 {
-				thumbHeight = 10 // Minimum 10 lines
-			}
-			
-			// Check cache first - ensure it's for the current item
-			currentItemID := m.currentDetails.VideoID
-			cacheKey := fmt.Sprintf("%s_%d_%d", currentItemID, thumbWidth, thumbHeight)
-			
-			if cachedThumbnail, exists := m.thumbnailCache[cacheKey]; exists {
-				// Use cached thumbnail for this specific item
-				thumbnailLines := strings.Count(cachedThumbnail, "\n")
-				if thumbnailLines == 0 && cachedThumbnail != "" {
-					thumbnailLines = 1
-				}
-				
-				if linesUsed + thumbnailLines + 3 < maxLines {
-					details.WriteString(cachedThumbnail)
-					details.WriteString("\n\n")
-					linesUsed += thumbnailLines + 2
-				}
-			} else {
-				// Render and cache immediately (but with optimizations)
-				if thumbnail, err := renderThumbnailInlineOptimized(imageURL, thumbWidth, thumbHeight, currentItemID); err == nil {
-					// Cache the result for this specific item
-					m.thumbnailCache[cacheKey] = thumbnail
-					
-					// Count actual lines in the rendered thumbnail
-					thumbnailLines := strings.Count(thumbnail, "\n")
-					if thumbnailLines == 0 && thumbnail != "" {
-						thumbnailLines = 1
-					}
-					
-					// Check if we have space for the thumbnail plus some detail text
-					if linesUsed + thumbnailLines + 3 < maxLines {
-						details.WriteString(thumbnail)
-						details.WriteString("\n\n")
-						linesUsed += thumbnailLines + 2
-					}
-				}
-			}
-			
-			if linesUsed >= maxLines {
-				return details.String()
-			}
-		}
-	}
 	
 	// Video title
 	title := m.currentDetails.Title
@@ -938,14 +1231,110 @@ func (m model) renderDetails(width, height int) string {
 	return details.String()
 }
 
-// CleanupMpvProcesses kills any running mpv processes when ytui exits
+// calculateDetailsLines estimates how many lines the video details will use
+func (m model) calculateDetailsLines(rightWidth int) int {
+	if m.currentDetails == nil {
+		return 0
+	}
+	
+	lines := 1 // Title line
+	lines += 6 // Title, Author, Duration, Views, Published, URL (basic info)
+	
+	// Account for description if present and space allows
+	if m.currentDetails.Description != "" {
+		lines += 2 // Description header + at least one line
+		// Rough estimate of description lines (word wrap)
+		words := len(strings.Fields(m.currentDetails.Description))
+		lineWidth := rightWidth - 4
+		if lineWidth < 20 {
+			lineWidth = 20
+		}
+		avgWordsPerLine := lineWidth / 6 // Rough estimate
+		if avgWordsPerLine > 0 {
+			descLines := (words / avgWordsPerLine) + 1
+			if descLines > 4 {
+				descLines = 4 // Limit description lines
+			}
+			lines += descLines
+		}
+	}
+	
+	return lines + 1 // Add buffer line
+}
+
+// renderKittyImageOverlay renders a Kitty protocol image overlay in the right panel
+func (m model) renderKittyImageOverlay(leftWidth, rightWidth, contentHeight int) {
+	if m.currentDetails == nil {
+		// Clear any existing Kitty image if no details
+		clearKittyImage()
+		return
+	}
+
+	// Calculate position in right panel
+	rightPanelX := leftWidth + 2  // Account for left border
+	
+	// Calculate Y position based on rendered content to avoid overlap
+	// Account for: panel title (1) + basic video info (6-7 lines) + buffer
+	detailsLines := m.calculateDetailsLines(rightWidth)
+	rightPanelY := 4 + detailsLines  // Start image below the text content
+
+	// Check if we have enough space for image after the details
+	maxLines := contentHeight - 2
+	availableLines := maxLines - detailsLines
+	if availableLines <= 8 {
+		// Not enough space for meaningful image, clear any existing image
+		clearKittyImage()
+		return
+	}
+
+	// Dynamic image sizing based on available space after details
+	thumbWidth := rightWidth - 4  // Account for borders
+	thumbHeight := (availableLines * 9) / 20  // Proportional to available space after details
+
+	// Constrain dimensions (similar to jtui constraints)
+	if thumbWidth > 40 {
+		thumbWidth = 40
+	}
+	if thumbHeight > 15 {
+		thumbHeight = 15
+	}
+	if thumbWidth < 20 {
+		thumbWidth = 20
+	}
+	if thumbHeight < 8 {
+		thumbHeight = 8
+	}
+
+	// For YouTube videos, construct thumbnail URL
+	imageURL := fmt.Sprintf("https://img.youtube.com/vi/%s/maxresdefault.jpg", m.currentDetails.VideoID)
+	currentItemID := m.currentDetails.VideoID
+
+	// Only render if different from current image or no current image
+	if globalKittyImageArea == nil || globalKittyImageArea.itemID != currentItemID {
+		// Attempt to render Kitty image
+		err := renderKittyImageAt(imageURL, rightPanelX, rightPanelY, thumbWidth, thumbHeight, currentItemID)
+		if err != nil {
+			// Kitty protocol failed, clear any existing image
+			clearKittyImage()
+		}
+	}
+}
+
+// CleanupMpvProcesses kills any running ytui-launched mpv processes
 func CleanupMpvProcesses() {
 	for _, cmd := range runningMpvProcesses {
 		if cmd.Process != nil {
 			cmd.Process.Kill()
 		}
 	}
+	// Clear the tracking list
 	runningMpvProcesses = nil
+
+	// Also clean up the socket file to prevent conflicts
+	os.Remove("/tmp/ytui-mpvsocket")
+	
+	// Clear any Kitty images
+	clearKittyImage()
 }
 
 // setupCleanupHandlers sets up signal handlers to cleanup mpv processes on exit
@@ -960,152 +1349,243 @@ func setupCleanupHandlers() {
 	}()
 }
 
-// renderThumbnailInline renders thumbnail image inline in terminal using halfblock renderer
-func renderThumbnailInline(imageURL string, width, height int) (string, error) {
+
+// yaziThumbnailConfig holds configuration for Yazi-style image processing
+type yaziThumbnailConfig struct {
+	filter      resize.InterpolationFunction
+	quality     int
+	maxWidth    int
+	maxHeight   int
+	minWidth    int
+	minHeight   int
+}
+
+// getYaziConfig returns Yazi-inspired configuration for high-quality thumbnails
+func getYaziConfig() yaziThumbnailConfig {
+	// Read user configuration for image filter (like Yazi's image_filter setting)
+	filterStr := viper.GetString("image_filter")
+	var filter resize.InterpolationFunction
+	switch filterStr {
+	case "nearest":
+		filter = resize.NearestNeighbor
+	case "bilinear", "triangle":
+		filter = resize.Bilinear
+	case "bicubic", "catmull-rom":
+		filter = resize.Bicubic
+	case "lanczos2":
+		filter = resize.Lanczos2
+	case "lanczos3":
+		filter = resize.Lanczos3
+	default:
+		filter = resize.Lanczos3 // Default to highest quality like Yazi
+	}
+
+	// Read quality setting (like Yazi's image_quality setting)
+	quality := viper.GetInt("image_quality")
+	if quality <= 0 || quality > 100 {
+		quality = 85 // High default quality
+	}
+
+	return yaziThumbnailConfig{
+		filter:    filter,
+		quality:   quality,
+		maxWidth:  70,
+		maxHeight: 30,
+		minWidth:  20,
+		minHeight: 8,
+	}
+}
+
+
+// renderKittyImageAt renders a Kitty protocol image at specific terminal coordinates
+func renderKittyImageAt(imageURL string, x, y, width, height int, itemID string) error {
 	if imageURL == "" {
-		return "", fmt.Errorf("no image URL provided")
+		return fmt.Errorf("no image URL provided")
 	}
 
-	// Validate dimensions to prevent excessive sizes
-	if width > 60 {
-		width = 60
+	config := getYaziConfig()
+
+	// Validate and constrain dimensions
+	if width > config.maxWidth {
+		width = config.maxWidth
 	}
-	if height > 25 {
-		height = 25
+	if height > config.maxHeight {
+		height = config.maxHeight
 	}
-	if width < 15 {
-		width = 15
+	if width < config.minWidth {
+		width = config.minWidth
 	}
-	if height < 6 {
-		height = 6
+	if height < config.minHeight {
+		height = config.minHeight
 	}
 
-	// Download image to temporary file with timeout
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(imageURL)
+	// Check for processed file first
+	processedFile := fmt.Sprintf("/tmp/ytui_kitty_%s_%dx%d.jpg", itemID, width, height)
+
+	// Check if processed image already exists for this exact size
+	if _, err := os.Stat(processedFile); os.IsNotExist(err) {
+		if err := downloadAndProcessImageForTerminal(imageURL, processedFile, width, height, config); err != nil {
+			return fmt.Errorf("failed to process image: %w", err)
+		}
+	}
+
+	// Clear previous Kitty image if different item
+	if globalKittyImageArea != nil && globalKittyImageArea.itemID != itemID {
+		clearKittyImage()
+	}
+
+	// Render using Kitty protocol
+	img, err := termimg.Open(processedFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to download image: %w", err)
+		os.Remove(processedFile) // Clean up on error
+		return fmt.Errorf("failed to open processed image: %w", err)
+	}
+
+	// Use Kitty protocol for high-quality rendering
+	kittyData, err := img.Width(width).Height(height).Protocol(termimg.Kitty).Render()
+	if err != nil {
+		return fmt.Errorf("failed to render Kitty image: %w", err)
+	}
+
+	// Position cursor and render
+	fmt.Printf("\x1b[%d;%dH", y+1, x+1) // Move to position (1-indexed)
+	fmt.Print(kittyData)
+
+	// Track the image area for cleanup
+	globalKittyImageArea = &imageArea{
+		x:      x,
+		y:      y,
+		width:  width,
+		height: height,
+		itemID: itemID,
+	}
+
+	return nil
+}
+
+// clearKittyImage clears the current Kitty protocol image
+func clearKittyImage() {
+	if globalKittyImageArea == nil {
+		return
+	}
+
+	// Send Kitty protocol delete command to clear all images
+	fmt.Print("\x1b_Gq=2,a=d,d=A\x1b\\")
+
+	// Also clear with spaces for safety
+	for row := 0; row < globalKittyImageArea.height; row++ {
+		fmt.Printf("\x1b[%d;%dH%s", 
+			globalKittyImageArea.y+row+1, 
+			globalKittyImageArea.x+1, 
+			strings.Repeat(" ", globalKittyImageArea.width))
+	}
+
+	globalKittyImageArea = nil
+}
+
+// downloadAndProcessImageForTerminal downloads and scales image perfectly for terminal display
+func downloadAndProcessImageForTerminal(imageURL, outputPath string, termWidth, termHeight int, config yaziThumbnailConfig) error {
+	// Use shared HTTP client for better performance and connection reuse
+	resp, err := imageDownloadClient.Get(imageURL)
+	if err != nil {
+		return fmt.Errorf("failed to download image: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Create temporary file
-	tmpFile, err := os.CreateTemp("", "ytui_thumb_*.jpg")
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned HTTP %d for image", resp.StatusCode)
+	}
+
+	// Decode image
+	img, _, err := image.Decode(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to create temp file: %w", err)
+		return fmt.Errorf("failed to decode image: %w", err)
 	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
 
-	// Copy image data to temp file with size limit
-	limitedReader := io.LimitReader(resp.Body, 10*1024*1024) // 10MB limit
-	_, err = io.Copy(tmpFile, limitedReader)
+	// Get original dimensions
+	bounds := img.Bounds()
+	origWidth := bounds.Dx()
+	origHeight := bounds.Dy()
+
+	// Calculate optimal pixel dimensions for terminal characters
+	// Use more accurate character dimensions for better image quality
+	targetPixelWidth := termWidth * 9   // More accurate character width
+	targetPixelHeight := termHeight * 18 // More accurate character height (halfblock)
+	
+	// Calculate target dimensions while preserving aspect ratio (Yazi approach)
+	targetWidth, targetHeight := calculateYaziDimensions(origWidth, origHeight, targetPixelWidth, targetPixelHeight)
+
+	// Apply high-quality resampling with performance optimization
+	var resized image.Image
+	if targetWidth != origWidth || targetHeight != origHeight {
+		// Only use high-quality filter for significant resize operations
+		if float64(targetWidth)/float64(origWidth) < 0.5 || float64(targetHeight)/float64(origHeight) < 0.5 {
+			resized = resize.Resize(uint(targetWidth), uint(targetHeight), img, config.filter)
+		} else {
+			// Use faster bilinear for minor resizes to improve performance
+			resized = resize.Resize(uint(targetWidth), uint(targetHeight), img, resize.Bilinear)
+		}
+	} else {
+		resized = img
+	}
+
+	// Save processed image with high quality
+	file, err := os.Create(outputPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to write temp file: %w", err)
+		return fmt.Errorf("failed to create output file: %w", err)
 	}
-	tmpFile.Close()
+	defer file.Close()
 
-	// Render image using go-termimg with forced halfblock renderer
-	img, err := termimg.Open(tmpFile.Name())
-	if err != nil {
-		return "", fmt.Errorf("failed to open image: %w", err)
-	}
-
-	// Configure dimensions and explicitly force halfblock renderer
-	rendered, err := img.Width(width).Height(height).Protocol(termimg.Halfblocks).Render()
-	if err != nil {
-		return "", fmt.Errorf("failed to render image: %w", err)
-	}
-
-	// Validate the output doesn't exceed expected dimensions
-	lines := strings.Split(rendered, "\n")
-	if len(lines) > height+2 { // Allow some tolerance
-		// Truncate if too many lines
-		rendered = strings.Join(lines[:height], "\n")
-	}
-
-	return rendered, nil
+	// Use JPEG with high quality (like Yazi's quality setting)
+	return jpeg.Encode(file, resized, &jpeg.Options{Quality: config.quality})
 }
 
-// renderThumbnailInlineOptimized renders thumbnail with disk caching for better performance
-func renderThumbnailInlineOptimized(imageURL string, width, height int, itemID string) (string, error) {
-	if imageURL == "" {
-		return "", fmt.Errorf("no image URL provided")
+// calculateYaziDimensions calculates optimal dimensions while preserving aspect ratio
+func calculateYaziDimensions(origWidth, origHeight, maxWidth, maxHeight int) (int, int) {
+	if origWidth <= maxWidth && origHeight <= maxHeight {
+		return origWidth, origHeight
 	}
 
-	// Validate dimensions to prevent excessive sizes
-	if width > 70 {
-		width = 70
-	}
-	if height > 30 {
-		height = 30
-	}
-	if width < 20 {
-		width = 20
-	}
-	if height < 8 {
-		height = 8
+	// Calculate scaling ratios
+	widthRatio := float64(maxWidth) / float64(origWidth)
+	heightRatio := float64(maxHeight) / float64(origHeight)
+
+	// Use the smaller ratio to ensure both dimensions fit
+	ratio := widthRatio
+	if heightRatio < widthRatio {
+		ratio = heightRatio
 	}
 
-	// Check for persistent cache file first
-	cacheDir := "/tmp/ytui_thumbs"
-	os.MkdirAll(cacheDir, 0755)
-	cacheFile := fmt.Sprintf("%s/%s_%dx%d.txt", cacheDir, itemID, width, height)
+	return int(float64(origWidth) * ratio), int(float64(origHeight) * ratio)
+}
+
+// cleanupOldThumbnails removes old thumbnail cache files to prevent disk space issues
+func cleanupOldThumbnails() {
+
+	// Clean up old cache directory completely to force fresh generation
+	oldCacheDir := "/tmp/ytui_thumbs"
+	if _, err := os.Stat(oldCacheDir); err == nil {
+		os.RemoveAll(oldCacheDir) // Remove all old cache files
+	}
+
+	// Also clean up processed images older than 2 hours (extended for better performance)
+	imageCutoff := time.Now().Add(-2 * time.Hour)
 	
-	// Try to read from cache
-	if cached, err := os.ReadFile(cacheFile); err == nil {
-		return string(cached), nil
-	}
-
-	// Download image to temporary file with timeout (reuse existing logic but optimize)
-	tmpFile := fmt.Sprintf("/tmp/ytui_img_%s.jpg", itemID)
-	
-	// Check if image already downloaded
-	if _, err := os.Stat(tmpFile); os.IsNotExist(err) {
-		client := &http.Client{Timeout: 5 * time.Second} // Reduced timeout
-		resp, err := client.Get(imageURL)
-		if err != nil {
-			return "", fmt.Errorf("failed to download image: %w", err)
-		}
-		defer resp.Body.Close()
-
-		file, err := os.Create(tmpFile)
-		if err != nil {
-			return "", fmt.Errorf("failed to create temp file: %w", err)
-		}
-		defer file.Close()
-
-		// Copy with size limit
-		limitedReader := io.LimitReader(resp.Body, 5*1024*1024) // Reduced to 5MB
-		_, err = io.Copy(file, limitedReader)
-		if err != nil {
-			return "", fmt.Errorf("failed to write temp file: %w", err)
+	// Use more efficient cleanup for /tmp directory
+	tmpEntries, err := os.ReadDir("/tmp")
+	if err == nil {
+		for _, entry := range tmpEntries {
+			name := entry.Name()
+			if !entry.IsDir() && 
+				(strings.HasPrefix(name, "ytui_img_") || strings.HasPrefix(name, "ytui_kitty_")) && 
+				strings.HasSuffix(name, ".jpg") {
+				if info, err := entry.Info(); err == nil && info.ModTime().Before(imageCutoff) {
+					os.Remove(filepath.Join("/tmp", name))
+				}
+			}
 		}
 	}
-
-	// Render image using go-termimg with forced halfblock renderer
-	img, err := termimg.Open(tmpFile)
-	if err != nil {
-		os.Remove(tmpFile) // Clean up on error
-		return "", fmt.Errorf("failed to open image: %w", err)
-	}
-
-	// Configure dimensions and explicitly force halfblock renderer
-	rendered, err := img.Width(width).Height(height).Protocol(termimg.Halfblocks).Render()
-	if err != nil {
-		return "", fmt.Errorf("failed to render image: %w", err)
-	}
-
-	// Validate the output doesn't exceed expected dimensions
-	lines := strings.Split(rendered, "\n")
-	if len(lines) > height+2 { // Allow some tolerance
-		// Truncate if too many lines
-		rendered = strings.Join(lines[:height], "\n")
-	}
-
-	// Cache the result to disk for next time
-	os.WriteFile(cacheFile, []byte(rendered), 0644)
-
-	return rendered, nil
 }
 
 func openThumbnail(video youtube.SearchResultItem) tea.Cmd {
@@ -1157,12 +1637,52 @@ var helpText = strings.Join([]string{
 	"Enter: select/play",
 	"h/Bksp: back",
 	"t: thumbnail",
-	"s: sort by date",
-	"p/Space: play",
+	"s: sort by date/stop",
+	"p/Space: play/pause",
 	"d: download",
 	"/: search",
 	"q: quit",
 }, " • ")
+
+func (m model) renderHeader() string {
+	// App title with modern styling
+	appName := headerTitleStyle.Render("📺 YTUI")
+	
+	// Current view indicator
+	var currentLocation string
+	switch m.currentView {
+	case MainMenuView:
+		currentLocation = "🏠 Main Menu"
+	case SearchInputView:
+		currentLocation = "🔍 Search: " + m.searchQuery
+	case SearchResultsView:
+		currentLocation = "📋 Search Results"
+	case SubscribedView:
+		currentLocation = "📺 Subscribed Channels"
+	case HistoryView:
+		currentLocation = "🕰️ Watch History"
+	default:
+		currentLocation = "📋 Content"
+	}
+	
+	// Connection status (simplified for YouTube)
+	status := headerStatusStyle.Render("🌐 ONLINE")
+	
+	// Create dividers
+	divider := headerDividerStyle.Render(" │ ")
+	
+	// Build header content
+	leftSide := appName + divider + currentLocation
+	rightSide := status
+	
+	// Calculate spacing
+	usedSpace := lipgloss.Width(leftSide) + lipgloss.Width(rightSide)
+	spacer := strings.Repeat(" ", max(1, m.width-usedSpace-4)) // -4 for padding
+	
+	headerContent := leftSide + spacer + rightSide
+	
+	return headerStyle.Width(m.width).Render(headerContent)
+}
 
 func (m model) renderHelp() string {
 	if len(helpText) > m.width-2 {
@@ -1170,4 +1690,12 @@ func (m model) renderHelp() string {
 	}
 	
 	return dimStyle.Render(helpText)
+}
+
+// Helper function for max calculation
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
